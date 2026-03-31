@@ -44,3 +44,14 @@ app-example
 
 # Claude Code
 CLAUDE.md
+.claude/
+.agents/
+.superpowers/
+.mcp.json
+skills-lock.json
+
+# Python
+__pycache__/
+*.pyc
+backend/venv/
+backend/.env
