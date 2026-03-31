@@ -1,98 +1,398 @@
-import * as Device from 'expo-device';
-import { Platform, StyleSheet } from 'react-native';
-import { SafeAreaView } from 'react-native-safe-area-context';
+import { useEffect, useRef, useState } from 'react'
+import {
+  ActivityIndicator,
+  Platform,
+  Pressable,
+  StyleSheet,
+  TextInput,
+  View,
+} from 'react-native'
+import { SafeAreaView } from 'react-native-safe-area-context'
+import Animated, { FadeIn } from 'react-native-reanimated'
+import { useRouter } from 'expo-router'
 
-import { AnimatedIcon } from '@/components/animated-icon';
-import { HintRow } from '@/components/hint-row';
-import { ThemedText } from '@/components/themed-text';
-import { ThemedView } from '@/components/themed-view';
-import { WebBadge } from '@/components/web-badge';
-import { BottomTabInset, MaxContentWidth, Spacing } from '@/constants/theme';
+import { ThemedText } from '@/components/themed-text'
+import { Colors } from '@/constants/theme'
+import { useAuth } from '@/lib/auth'
+import { sendCode, verifyCode } from '@/lib/api'
+import { formatToE164, formatPhone } from '@/lib/phone'
 
-function getDevMenuHint() {
-  if (Platform.OS === 'web') {
-    return <ThemedText type="small">use browser devtools</ThemedText>;
+const C = Colors.light
+const isWeb = Platform.OS === 'web'
+
+// ── Main page ────────────────────────────────────────────────────────
+export default function StartPage() {
+  const router = useRouter()
+  const { userId, loading: authLoading, signIn } = useAuth()
+
+  const [step, setStep] = useState<'phone' | 'code'>('phone')
+  const [phone, setPhone] = useState('')
+  const [code, setCode] = useState('')
+  const [loading, setLoading] = useState(false)
+  const [error, setError] = useState('')
+  const codeRefs = useRef<(TextInput | null)[]>([])
+
+  useEffect(() => {
+    if (!authLoading && userId) router.replace('/(app)')
+  }, [authLoading, userId])
+
+
+  const handleSendCode = async () => {
+    setError('')
+    setLoading(true)
+    try {
+      await sendCode(formatToE164(phone))
+      setStep('code')
+    } catch {
+      setError('Failed to send code. Check your number.')
+    } finally {
+      setLoading(false)
+    }
   }
-  if (Device.isDevice) {
-    return (
-      <ThemedText type="small">
-        shake device or press <ThemedText type="code">m</ThemedText> in terminal
-      </ThemedText>
-    );
+
+  const handleVerifyCode = async (codeValue: string) => {
+    if (codeValue.length < 6) return
+    setError('')
+    setLoading(true)
+    try {
+      const result = await verifyCode(formatToE164(phone), codeValue)
+      await signIn(result.user_id)
+      router.replace('/(app)')
+    } catch {
+      setError('Invalid code. Try again.')
+    } finally {
+      setLoading(false)
+    }
   }
-  const shortcut = Platform.OS === 'android' ? 'cmd+m (or ctrl+m)' : 'cmd+d';
+
+  const handleCodeDigit = (text: string, i: number) => {
+    const digits = code.split('')
+    if (text) {
+      digits[i] = text[text.length - 1]
+      const joined = digits.join('')
+      setCode(joined)
+      if (joined.length === 6) {
+        codeRefs.current[i]?.blur()
+        setTimeout(() => handleVerifyCode(joined), 50)
+      } else if (i < 5) {
+        codeRefs.current[i + 1]?.focus()
+      }
+    } else {
+      digits[i] = ''
+      setCode(digits.join(''))
+      if (i > 0) codeRefs.current[i - 1]?.focus()
+    }
+  }
+
+  if (authLoading) return <View style={styles.page} />
+
   return (
-    <ThemedText type="small">
-      press <ThemedText type="code">{shortcut}</ThemedText>
-    </ThemedText>
-  );
-}
+    <View style={styles.page}>
+      <SafeAreaView style={styles.safe}>
+        <View style={styles.content}>
+          {/* Header */}
+          <View style={styles.header}>
+            <Animated.View entering={FadeIn.duration(1200).delay(200)}>
+              <ThemedText serif style={[styles.title, { color: C.ink }]}>
+                Lasu
+              </ThemedText>
+            </Animated.View>
+            <Animated.View entering={FadeIn.duration(1200).delay(900)}>
+              <ThemedText serif style={[styles.tagline, { color: C.graphite }]}>
+                the assistant meant to replace you
+              </ThemedText>
+            </Animated.View>
+          </View>
 
-export default function HomeScreen() {
-  return (
-    <ThemedView style={styles.container}>
-      <SafeAreaView style={styles.safeArea}>
-        <ThemedView style={styles.heroSection}>
-          <AnimatedIcon />
-          <ThemedText type="title" style={styles.title}>
-            Welcome to&nbsp;Expo
-          </ThemedText>
-        </ThemedView>
+          {/* Input */}
+          <Animated.View
+            entering={FadeIn.duration(1200).delay(1600)}
+            style={styles.inputArea}
+          >
+            {step === 'phone' ? (
+              <View key="phone" style={styles.card}>
+                <View style={styles.phoneRow}>
+                  <ThemedText style={[styles.prefix, { color: C.pencil }]}>
+                    +1
+                  </ThemedText>
+                  <TextInput
+                    style={styles.phoneInput}
+                    placeholder="(555) 000-0000"
+                    placeholderTextColor={C.pencil}
+                    keyboardType="phone-pad"
+                    returnKeyType="go"
+                    onSubmitEditing={handleSendCode}
+                    value={formatPhone(phone)}
+                    onChangeText={(t) => {
+                      setPhone(t.replace(/\D/g, '').slice(0, 10))
+                      setError('')
+                    }}
+                    maxLength={14}
+                    autoFocus
+                  />
+                  {loading ? (
+                    <ActivityIndicator color={C.pencil} size="small" />
+                  ) : (
+                    <Pressable
+                      onPress={handleSendCode}
+                      style={({ pressed }) => [
+                        styles.enterBtn,
+                        pressed && styles.enterBtnPressed,
+                      ]}
+                    >
+                      <ThemedText style={[styles.enterArrow, { color: C.pencil }]}>
+                        ↵
+                      </ThemedText>
+                    </Pressable>
+                  )}
+                </View>
 
-        <ThemedText type="code" style={styles.code}>
-          get started
-        </ThemedText>
+                {error ? (
+                  <ThemedText style={styles.error}>{error}</ThemedText>
+                ) : null}
 
-        <ThemedView type="backgroundElement" style={styles.stepContainer}>
-          <HintRow
-            title="Try editing"
-            hint={<ThemedText type="code">src/app/index.tsx</ThemedText>}
-          />
-          <HintRow title="Dev tools" hint={getDevMenuHint()} />
-          <HintRow
-            title="Fresh start"
-            hint={<ThemedText type="code">npm run reset-project</ThemedText>}
-          />
-        </ThemedView>
+                <View style={styles.legal}>
+                  <ThemedText style={[styles.legalText, { color: C.ruledLine }]}>
+                    By continuing, you agree to our{' '}
+                  </ThemedText>
+                  <Pressable style={({ pressed }) => pressed && { opacity: 0.5 }}>
+                    <ThemedText style={[styles.legalLink, { color: C.pencil }]}>
+                      terms of service
+                    </ThemedText>
+                  </Pressable>
+                  <ThemedText style={[styles.legalText, { color: C.ruledLine }]}>
+                    {' '}and{' '}
+                  </ThemedText>
+                  <Pressable style={({ pressed }) => pressed && { opacity: 0.5 }}>
+                    <ThemedText style={[styles.legalLink, { color: C.pencil }]}>
+                      privacy policy
+                    </ThemedText>
+                  </Pressable>
+                </View>
+              </View>
+            ) : (
+              <View key="code" style={styles.card}>
+                <ThemedText
+                  type="small"
+                  style={[styles.codeHint, { color: C.pencil }]}
+                >
+                  Code sent to {formatToE164(phone)}
+                </ThemedText>
 
-        {Platform.OS === 'web' && <WebBadge />}
+                <View style={styles.codeRow}>
+                  {Array.from({ length: 6 }).map((_, i) => (
+                    <TextInput
+                      key={i}
+                      ref={(r) => {
+                        codeRefs.current[i] = r
+                      }}
+                      style={[
+                        styles.codeBox,
+                        code[i] ? styles.codeBoxFill : styles.codeBoxEmpty,
+                      ]}
+                      keyboardType="number-pad"
+                      maxLength={1}
+                      value={code[i] ?? ''}
+                      onChangeText={(t) => handleCodeDigit(t, i)}
+                      autoFocus={i === 0}
+                      selectTextOnFocus
+                    />
+                  ))}
+                </View>
+
+                {error ? (
+                  <ThemedText style={styles.error}>{error}</ThemedText>
+                ) : null}
+
+                {loading ? (
+                  <ActivityIndicator color={C.pencil} size="small" style={{ marginTop: 8 }} />
+                ) : null}
+
+                <Pressable
+                  onPress={() => {
+                    setStep('phone')
+                    setCode('')
+                    setError('')
+                  }}
+                  style={({ pressed }) => [
+                    styles.ghost,
+                    pressed && styles.ghostPressed,
+                  ]}
+                >
+                  <ThemedText type="small" style={{ color: C.pencil }}>
+                    Use a different number
+                  </ThemedText>
+                </Pressable>
+              </View>
+            )}
+          </Animated.View>
+        </View>
+
       </SafeAreaView>
-    </ThemedView>
-  );
+    </View>
+  )
 }
 
+// ── Styles ───────────────────────────────────────────────────────────
 const styles = StyleSheet.create({
-  container: {
+  page: {
+    flex: 1,
+    backgroundColor: C.parchment,
+    ...(isWeb && { minHeight: '100vh' } as any),
+  },
+  safe: {
+    flex: 1,
+    zIndex: 2,
+  },
+  content: {
     flex: 1,
     justifyContent: 'center',
-    flexDirection: 'row',
-  },
-  safeArea: {
-    flex: 1,
-    paddingHorizontal: Spacing.four,
     alignItems: 'center',
-    gap: Spacing.three,
-    paddingBottom: BottomTabInset + Spacing.three,
-    maxWidth: MaxContentWidth,
+    paddingHorizontal: 24,
   },
-  heroSection: {
+
+  // ── Header ──
+  header: {
     alignItems: 'center',
-    justifyContent: 'center',
-    flex: 1,
-    paddingHorizontal: Spacing.four,
-    gap: Spacing.four,
+    marginBottom: 48,
   },
   title: {
+    fontSize: 72,
+    fontWeight: '400',
     textAlign: 'center',
+    letterSpacing: -0.5,
+    ...(isWeb && { fontFamily: 'var(--font-serif)' } as any),
   },
-  code: {
+  tagline: {
+    fontSize: 12,
+    fontWeight: '400',
+    textAlign: 'center',
+    marginTop: 32,
     textTransform: 'uppercase',
+    ...(isWeb && { fontFamily: 'var(--font-mono)' } as any),
   },
-  stepContainer: {
-    gap: Spacing.three,
-    alignSelf: 'stretch',
-    paddingHorizontal: Spacing.three,
-    paddingVertical: Spacing.four,
-    borderRadius: Spacing.four,
+
+  // ── Input area ──
+  inputArea: {
+    width: '100%',
+    maxWidth: 340,
   },
-});
+  card: {
+    width: '100%',
+    gap: 16,
+    alignItems: 'center',
+  },
+
+  // ── Phone ──
+  phoneRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 8,
+    width: '100%',
+    borderBottomWidth: 1,
+    borderBottomColor: C.ruledLine,
+    paddingBottom: 6,
+  },
+  prefix: {
+    fontSize: 18,
+    fontWeight: '400',
+    ...(isWeb && { fontFamily: 'var(--font-display)' } as any),
+  },
+  phoneInput: {
+    flex: 1,
+    fontSize: 18,
+    color: C.ink,
+    fontWeight: '400',
+    ...(isWeb && {
+      outlineStyle: 'none',
+      fontFamily: 'var(--font-display)',
+    } as any),
+  },
+
+  // ── Code ──
+  codeHint: {
+    textAlign: 'center',
+    marginBottom: 4,
+  },
+  codeRow: {
+    flexDirection: 'row',
+    gap: 8,
+  },
+  codeBox: {
+    width: 44,
+    height: 50,
+    borderRadius: 8,
+    fontSize: 20,
+    color: C.ink,
+    textAlign: 'center',
+    backgroundColor: C.agedPaper,
+    ...(isWeb && {
+      outlineStyle: 'none',
+      fontFamily: 'var(--font-display)',
+      transition: 'border-color 200ms ease',
+    } as any),
+  },
+  codeBoxFill: {
+    borderWidth: 2,
+    borderColor: C.tide,
+  },
+  codeBoxEmpty: {
+    borderWidth: 0.5,
+    borderColor: C.ruledLine,
+  },
+
+  // ── Error ──
+  error: {
+    color: C.errorText,
+    fontSize: 13,
+    ...(isWeb && { fontFamily: 'var(--font-display)' } as any),
+  },
+
+  // ── Buttons ──
+  enterBtn: {
+    width: 36,
+    height: 36,
+    borderRadius: 18,
+    alignItems: 'center',
+    justifyContent: 'center',
+    ...(isWeb && {
+      cursor: 'pointer',
+      transition: 'background-color 150ms ease',
+    } as any),
+  },
+  enterBtnPressed: {
+    backgroundColor: C.vellum,
+  },
+  enterArrow: {
+    fontSize: 22,
+    ...(isWeb && { fontFamily: 'var(--font-mono)' } as any),
+  },
+  btnOff: {
+    opacity: 0.35,
+  },
+  ghost: {
+    paddingVertical: 4,
+    paddingHorizontal: 8,
+    borderRadius: 8,
+    ...(isWeb && { cursor: 'pointer' } as any),
+  },
+  ghostPressed: {
+    backgroundColor: C.vellum,
+  },
+
+  // ── Legal ──
+  legal: {
+    flexDirection: 'row',
+    flexWrap: 'wrap',
+    justifyContent: 'center',
+  },
+  legalText: {
+    fontSize: 10,
+    ...(isWeb && { fontFamily: 'var(--font-display)' } as any),
+  },
+  legalLink: {
+    fontSize: 10,
+    textDecorationLine: 'underline',
+    ...(isWeb && { fontFamily: 'var(--font-display)', cursor: 'pointer' } as any),
+  },
+})
