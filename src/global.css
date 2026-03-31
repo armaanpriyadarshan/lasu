@@ -1,9 +1,103 @@
+@import url('https://fonts.googleapis.com/css2?family=Instrument+Serif:ital@0;1&family=Inter:wght@400;500&family=JetBrains+Mono:wght@400;500&display=swap');
+
 :root {
-  --font-display:
-    Spline Sans, Inter, ui-sans-serif, system-ui, sans-serif, Apple Color Emoji, Segoe UI Emoji,
-    Segoe UI Symbol, Noto Color Emoji;
-  --font-mono:
-    ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, Liberation Mono, Courier New, monospace;
-  --font-rounded: 'SF Pro Rounded', 'Hiragino Maru Gothic ProN', Meiryo, 'MS PGothic', sans-serif;
-  --font-serif: Georgia, 'Times New Roman', serif;
+  /* Paper */
+  --parchment: #F5F0E3;
+  --aged-paper: #EBE5D5;
+  --vellum: #E0DAC8;
+  --ruled-line: #C5BFA8;
+  --pencil: #8A877E;
+  --graphite: #6B6860;
+  --faded-ink: #3D3D3A;
+  --iron-gall: #2C2A25;
+  --ink: #1A1A18;
+
+  /* Warm accents */
+  --wax-seal: #D4845A;
+  --seal-dark: #B56E45;
+  --seal-light: #E8A87C;
+  --seal-wash: #FAE6D0;
+
+  /* Cool accents */
+  --tide: #2B7A9E;
+  --shallows: #5BB5C9;
+  --mist: #E0F4F7;
+  --deep: #0F2942;
+
+  /* Fonts */
+  --font-serif: 'Instrument Serif', Georgia, serif;
+  --font-display: 'Inter', system-ui, sans-serif;
+  --font-body: 'Inter', system-ui, sans-serif;
+  --font-mono: 'JetBrains Mono', ui-monospace, SFMono-Regular, monospace;
+}
+
+* {
+  box-sizing: border-box;
+}
+
+html, body, #root {
+  margin: 0;
+  padding: 0;
+  height: 100%;
+  -webkit-font-smoothing: antialiased;
+  -moz-osx-font-smoothing: grayscale;
+}
+
+::selection {
+  background: rgba(43, 122, 158, 0.2);
+}
+
+input::placeholder {
+  color: var(--pencil);
+}
+
+input:focus {
+  outline: none;
+}
+
+::-webkit-scrollbar {
+  width: 5px;
+}
+::-webkit-scrollbar-track {
+  background: transparent;
+}
+::-webkit-scrollbar-thumb {
+  background: var(--ruled-line);
+  border-radius: 3px;
+}
+::-webkit-scrollbar-thumb:hover {
+  background: var(--pencil);
+}
+
+/* Hover effects */
+[data-hover="vellum"]:hover {
+  background-color: #E0DAC8 !important;
+}
+[data-hover="card"] {
+  transition: border-color 150ms ease, transform 200ms ease, box-shadow 200ms ease;
+}
+[data-hover="card"]:hover {
+  border-color: #C5BFA8 !important;
+  transform: translateY(-1px);
+  box-shadow: 0 2px 8px rgba(26, 26, 24, 0.06);
+}
+[data-hover="card"]:active {
+  transform: translateY(0);
+  box-shadow: none;
+}
+[data-hover="dim"] {
+  transition: opacity 150ms ease;
+}
+[data-hover="dim"]:hover {
+  opacity: 0.6 !important;
+}
+[data-hover="vellum"] {
+  transition: background-color 150ms ease;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  *, *::before, *::after {
+    animation-duration: 0.01ms !important;
+    transition-duration: 0.01ms !important;
+  }
 }
