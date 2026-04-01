@@ -6,7 +6,7 @@ load_dotenv()
 
 supabase: Client = create_client(
     os.environ["SUPABASE_URL"],
-    os.environ["SUPABASE_KEY"]
+    os.environ["SUPABASE_SERVICE_ROLE_KEY"]
 )
 
 
@@ -42,3 +42,22 @@ async def save_message(user_id: str, role: str, content: str):
         "role": role,
         "content": content
     }).execute()
+
+
+async def create_telegram_user():
+    res = supabase.table("users").insert({"verified": True}).execute()
+    return res.data[0]
+
+
+async def get_user_by_telegram(chat_id: int):
+    res = supabase.table("users").select("*").eq("telegram_chat_id", chat_id).execute()
+    return res.data[0] if res.data else None
+
+
+async def link_telegram(user_id: str, chat_id: int):
+    supabase.table("users").update({"telegram_chat_id": chat_id}).eq("id", user_id).execute()
+
+
+async def get_user_by_id(user_id: str):
+    res = supabase.table("users").select("*").eq("id", user_id).execute()
+    return res.data[0] if res.data else None

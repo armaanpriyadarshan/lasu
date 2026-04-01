@@ -19,3 +19,31 @@ export async function verifyCode(phone: string, code: string) {
   if (!res.ok) throw new Error('Invalid code')
   return res.json() as Promise<{ ok: boolean; user_id: string }>
 }
+
+export async function getConfig() {
+  const res = await fetch(`${API_URL}/config`)
+  if (!res.ok) throw new Error('Failed to fetch config')
+  return res.json() as Promise<{ sms_number: string }>
+}
+
+export async function getMessages(userId: string) {
+  const res = await fetch(`${API_URL}/messages/${userId}`)
+  if (!res.ok) throw new Error('Failed to fetch messages')
+  return res.json() as Promise<{ messages: { role: string; content: string }[] }>
+}
+
+export async function authTelegram() {
+  const res = await fetch(`${API_URL}/auth/telegram`, { method: 'POST' })
+  if (!res.ok) throw new Error('Failed to create account')
+  return res.json() as Promise<{ ok: boolean; user_id: string }>
+}
+
+export async function getUser(userId: string) {
+  const res = await fetch(`${API_URL}/users/${userId}`)
+  if (!res.ok) throw new Error('Failed to fetch user')
+  return res.json() as Promise<{
+    id: string
+    phone_number: string | null
+    telegram_chat_id: number | null
+  }>
+}

@@ -14,7 +14,7 @@ import { useRouter } from 'expo-router'
 import { ThemedText } from '@/components/themed-text'
 import { Colors } from '@/constants/theme'
 import { useAuth } from '@/lib/auth'
-import { sendCode, verifyCode } from '@/lib/api'
+import { sendCode, verifyCode, authTelegram } from '@/lib/api'
 import { formatToE164, formatPhone } from '@/lib/phone'
 
 const C = Colors.light
@@ -84,6 +84,20 @@ export default function StartPage() {
     }
   }
 
+  const handleTelegram = async () => {
+    setError('')
+    setLoading(true)
+    try {
+      const result = await authTelegram()
+      await signIn(result.user_id)
+      router.replace('/(app)')
+    } catch {
+      setError('Something went wrong. Try again.')
+    } finally {
+      setLoading(false)
+    }
+  }
+
   if (authLoading) return <View style={styles.page} />
 
   return (
@@ -99,7 +113,7 @@ export default function StartPage() {
             </Animated.View>
             <Animated.View entering={FadeIn.duration(1200).delay(900)}>
               <ThemedText serif style={[styles.tagline, { color: C.graphite }]}>
-                the assistant meant to replace you
+                the personal intelligence that knows you
               </ThemedText>
             </Animated.View>
           </View>
@@ -155,7 +169,10 @@ export default function StartPage() {
                   <ThemedText style={[styles.legalText, { color: C.ruledLine }]}>
                     By continuing, you agree to our{' '}
                   </ThemedText>
-                  <Pressable style={({ pressed }) => pressed && { opacity: 0.5 }}>
+                  <Pressable
+                    onPress={() => router.push('/terms')}
+                    style={({ pressed }) => pressed && { opacity: 0.5 }}
+                  >
                     <ThemedText style={[styles.legalLink, { color: C.pencil }]}>
                       terms of service
                     </ThemedText>
@@ -163,12 +180,33 @@ export default function StartPage() {
                   <ThemedText style={[styles.legalText, { color: C.ruledLine }]}>
                     {' '}and{' '}
                   </ThemedText>
-                  <Pressable style={({ pressed }) => pressed && { opacity: 0.5 }}>
+                  <Pressable
+                    onPress={() => router.push('/privacy')}
+                    style={({ pressed }) => pressed && { opacity: 0.5 }}
+                  >
                     <ThemedText style={[styles.legalLink, { color: C.pencil }]}>
                       privacy policy
                     </ThemedText>
                   </Pressable>
                 </View>
+
+                <View style={styles.dividerRow}>
+                  <View style={styles.dividerLine} />
+                  <ThemedText style={[styles.dividerText, { color: C.pencil }]}>or</ThemedText>
+                  <View style={styles.dividerLine} />
+                </View>
+
+                <Pressable
+                  onPress={handleTelegram}
+                  style={({ pressed }) => [
+                    styles.telegramBtn,
+                    pressed && styles.telegramBtnPressed,
+                  ]}
+                >
+                  <ThemedText style={[styles.telegramText, { color: C.fadedInk }]}>
+                    Continue with Telegram
+                  </ThemedText>
+                </Pressable>
               </View>
             ) : (
               <View key="code" style={styles.card}>
@@ -176,7 +214,7 @@ export default function StartPage() {
                   type="small"
                   style={[styles.codeHint, { color: C.pencil }]}
                 >
-                  Code sent to {formatToE164(phone)}
+                  Code sent to +1 {formatPhone(phone)}
                 </ThemedText>
 
                 <View style={styles.codeRow}>
@@ -378,6 +416,43 @@ const styles = StyleSheet.create({
   },
   ghostPressed: {
     backgroundColor: C.vellum,
+  },
+
+  // ── Divider ──
+  dividerRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 12,
+    width: '100%',
+  },
+  dividerLine: {
+    flex: 1,
+    height: 0.5,
+    backgroundColor: C.ruledLine,
+  },
+  dividerText: {
+    fontSize: 11,
+    ...(isWeb && { fontFamily: 'var(--font-mono)' } as any),
+  },
+
+  // ── Telegram ──
+  telegramBtn: {
+    width: '100%',
+    paddingVertical: 12,
+    borderRadius: 8,
+    borderWidth: 0.5,
+    borderColor: C.ruledLine,
+    alignItems: 'center',
+    ...(isWeb && { cursor: 'pointer', transition: 'border-color 150ms ease' } as any),
+  },
+  telegramBtnPressed: {
+    borderColor: C.graphite,
+    backgroundColor: C.vellum,
+  },
+  telegramText: {
+    fontSize: 14,
+    fontWeight: '400',
+    ...(isWeb && { fontFamily: 'var(--font-display)' } as any),
   },
 
   // ── Legal ──

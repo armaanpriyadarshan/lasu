@@ -1,4 +1,6 @@
+import { useEffect, useState } from 'react'
 import {
+  Linking,
   Platform,
   Pressable,
   StyleSheet,
@@ -6,11 +8,19 @@ import {
   useWindowDimensions,
 } from 'react-native'
 import { Redirect, Slot, usePathname, useRouter } from 'expo-router'
+import Animated, { FadeIn } from 'react-native-reanimated'
+import { SafeAreaView } from 'react-native-safe-area-context'
 
 import { ThemedText } from '@/components/themed-text'
 import { SvgIcon, type IconName } from '@/components/icons'
 import { Colors } from '@/constants/theme'
 import { useAuth } from '@/lib/auth'
+import { getConfig, getMessages, getUser } from '@/lib/api'
+import { formatE164Display } from '@/lib/phone'
+
+const TELEGRAM_BOT = 'lasu'
+
+const isMobile = Platform.OS === 'ios' || Platform.OS === 'android'
 
 const C = Colors.light
 const isWeb = Platform.OS === 'web'
@@ -31,14 +41,112 @@ export default function AppLayout() {
   const { width } = useWindowDimensions()
   const isDesktop = width > 768
   const pathname = usePathname()
+  const [hasMessages, setHasMessages] = useState<boolean | null>(null)
+  const [smsNumber, setSmsNumber] = useState('')
+  const [isTelegramUser, setIsTelegramUser] = useState(false)
 
-  const handleSignOut = async () => {
-    await signOut()
-    router.replace('/')
+  useEffect(() => {
+    if (!userId) return
+    getMessages(userId)
+      .then(({ messages }) => setHasMessages(messages.length > 0))
+      .catch(() => setHasMessages(false))
+    getUser(userId)
+      .then((u) => setIsTelegramUser(!u.phone_number))
+      .catch(() => {})
+  }, [userId])
+
+  // Poll for first message while on setup
+  useEffect(() => {
+    if (!userId || hasMessages !== false) return
+    if (!isTelegramUser) {
+      getConfig().then((c) => setSmsNumber(c.sms_number)).catch(() => {})
+    }
+    const interval = setInterval(async () => {
+      try {
+        const { messages } = await getMessages(userId)
+        if (messages.length > 0) setHasMessages(true)
+      } catch {}
+    }, 4000)
+    return () => clearInterval(interval)
+  }, [userId, hasMessages, isTelegramUser])
+
+  const handleNumberPress = () => {
+    Linking.openURL(`sms:${smsNumber}`)
   }
 
-  if (loading) return null
+  const handleTelegramOpen = () => {
+    Linking.openURL(`https://t.me/${TELEGRAM_BOT}?start=${userId}`)
+  }
+
+  const handleSignOut = async () => {
+    router.replace('/')
+    await signOut()
+  }
+
+  if (loading || hasMessages === null) return null
   if (!userId) return <Redirect href="/" />
+
+  // No messages yet — show setup inline
+  if (!hasMessages) {
+    return (
+      <View style={styles.shell}>
+        <SafeAreaView style={styles.setupSafe}>
+          <View style={styles.setupContent}>
+            <Animated.View entering={FadeIn.duration(1200).delay(200)} style={styles.setupHeader}>
+              <ThemedText serif style={[styles.setupTitle, { color: C.ink }]}>
+                {isTelegramUser ? 'Message Lasu on Telegram' : 'Text Lasu to get started'}
+              </ThemedText>
+              <ThemedText style={[styles.setupSubtitle, { color: C.graphite }]}>
+                Send any message to get started.{'\n'}
+                Say hi, ask a question, tell it about yourself.
+              </ThemedText>
+            </Animated.View>
+
+            <Animated.View entering={FadeIn.duration(1200).delay(800)}>
+              {isTelegramUser ? (
+                <Pressable
+                  onPress={handleTelegramOpen}
+                  style={({ pressed }) => [
+                    styles.setupNumberBtn,
+                    pressed && styles.setupNumberBtnPressed,
+                  ]}
+                >
+                  <ThemedText serif style={[styles.setupNumber, { color: C.ink }]}>
+                    @{TELEGRAM_BOT}
+                  </ThemedText>
+                  <ThemedText style={[styles.setupAction, { color: C.pencil }]}>
+                    open in telegram
+                  </ThemedText>
+                </Pressable>
+              ) : smsNumber ? (
+                <Pressable
+                  onPress={handleNumberPress}
+                  style={({ pressed }) => [
+                    styles.setupNumberBtn,
+                    pressed && styles.setupNumberBtnPressed,
+                  ]}
+                >
+                  <ThemedText serif style={[styles.setupNumber, { color: C.ink }]}>
+                    {formatE164Display(smsNumber)}
+                  </ThemedText>
+                  <ThemedText style={[styles.setupAction, { color: C.pencil }]}>
+                    open in messages
+                  </ThemedText>
+                </Pressable>
+              ) : null}
+            </Animated.View>
+
+            <Animated.View entering={FadeIn.duration(800).delay(2000)} style={styles.setupWaiting}>
+              <View style={styles.setupDot} />
+              <ThemedText style={[styles.setupWaitingText, { color: C.pencil }]}>
+                Waiting for your first message
+              </ThemedText>
+            </Animated.View>
+          </View>
+        </SafeAreaView>
+      </View>
+    )
+  }
 
   const activeKey = pathname === '/' || pathname === '/(app)' ? 'dashboard' : pathname.replace('/', '')
 
@@ -277,5 +385,79 @@ const styles = StyleSheet.create({
     fontSize: 10,
     fontWeight: '500',
     ...(isWeb && { fontFamily: 'var(--font-display)' } as any),
+  },
+
+  // ── Setup (inline) ──
+  setupSafe: {
+    flex: 1,
+  },
+  setupContent: {
+    flex: 1,
+    justifyContent: 'center',
+    alignItems: 'center',
+    paddingHorizontal: 24,
+  },
+  setupHeader: {
+    alignItems: 'center',
+    marginBottom: 32,
+  },
+  setupTitle: {
+    fontSize: 32,
+    fontWeight: '400',
+    textAlign: 'center',
+    letterSpacing: -0.3,
+    ...(isWeb && { fontFamily: 'var(--font-serif)' } as any),
+  },
+  setupSubtitle: {
+    fontSize: 14,
+    fontWeight: '400',
+    textAlign: 'center',
+    marginTop: 12,
+    lineHeight: 22,
+    ...(isWeb && { fontFamily: 'var(--font-display)' } as any),
+  },
+  setupNumberBtn: {
+    alignItems: 'center',
+    borderWidth: 0.5,
+    borderColor: C.ruledLine,
+    borderRadius: 12,
+    paddingTop: 16,
+    paddingBottom: 12,
+    paddingHorizontal: 32,
+    backgroundColor: C.agedPaper,
+    ...(isWeb && { cursor: 'pointer', transition: 'border-color 150ms ease' } as any),
+  },
+  setupNumberBtnPressed: {
+    borderColor: C.graphite,
+  },
+  setupNumber: {
+    fontSize: 26,
+    fontWeight: '400',
+    letterSpacing: 0.5,
+    ...(isWeb && { fontFamily: 'var(--font-serif)' } as any),
+  },
+  setupAction: {
+    fontSize: 11,
+    fontWeight: '400',
+    marginTop: 8,
+    textTransform: 'uppercase',
+    ...(isWeb && { fontFamily: 'var(--font-mono)' } as any),
+  },
+  setupWaiting: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 8,
+    marginTop: 40,
+  },
+  setupDot: {
+    width: 6,
+    height: 6,
+    borderRadius: 3,
+    backgroundColor: C.waxSeal,
+  },
+  setupWaitingText: {
+    fontSize: 12,
+    fontWeight: '400',
+    ...(isWeb && { fontFamily: 'var(--font-mono)' } as any),
   },
 })

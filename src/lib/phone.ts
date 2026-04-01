@@ -18,3 +18,16 @@ export function formatPhone(digits: string): string {
   if (digits.length <= 6) return `(${digits.slice(0, 3)}) ${digits.slice(3)}`
   return `(${digits.slice(0, 3)}) ${digits.slice(3, 6)}-${digits.slice(6)}`
 }
+
+/**
+ * Format an E.164 number for display.
+ * Input: "+18449593997" → Output: "+1 (844) 959-3997"
+ */
+export function formatE164Display(e164: string): string {
+  const digits = e164.replace(/\D/g, '')
+  if (digits.length === 11 && digits.startsWith('1')) {
+    const local = digits.slice(1)
+    return `+1 (${local.slice(0, 3)}) ${local.slice(3, 6)}-${local.slice(6)}`
+  }
+  return e164
+}
