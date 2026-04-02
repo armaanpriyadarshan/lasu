@@ -27,6 +27,9 @@ def _get_flow() -> Flow:
     )
 
 
+_pending_verifiers: dict[str, str] = {}
+
+
 def get_auth_url(user_id: str) -> str:
     flow = _get_flow()
     auth_url, _ = flow.authorization_url(
@@ -34,11 +37,14 @@ def get_auth_url(user_id: str) -> str:
         prompt="consent",
         state=user_id,
     )
+    # Store the code verifier so we can use it during token exchange
+    _pending_verifiers[user_id] = flow.code_verifier
     return auth_url
 
 
 async def exchange_code(code: str, user_id: str) -> dict:
     flow = _get_flow()
+    flow.code_verifier = _pending_verifiers.pop(user_id, None)
     flow.fetch_token(code=code)
     creds = flow.credentials
 

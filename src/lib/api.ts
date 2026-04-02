@@ -225,6 +225,16 @@ export async function getAgentPermissions(agentId: string) {
   return res.json() as Promise<{ permissions: AgentPermission[] }>
 }
 
+export async function grantPermission(agentId: string, permission: string) {
+  const res = await authFetch(`${API_URL}/agents/${agentId}/permissions/grant`, {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({ permission, grant_type: 'permanent' }),
+  })
+  if (!res.ok) throw new Error('Failed to grant permission')
+  return res.json() as Promise<AgentPermission>
+}
+
 export async function getPendingRequests(agentId: string) {
   const res = await authFetch(`${API_URL}/agents/${agentId}/permissions/requests`)
   if (!res.ok) throw new Error('Failed to fetch requests')

@@ -246,6 +246,12 @@ async def deny_permission_endpoint(agent_id: str, request_id: str, _user: str = 
     return {"ok": True}
 
 
+@app.post("/agents/{agent_id}/permissions/grant")
+async def direct_grant_permission(agent_id: str, req: GrantPermissionRequest, _user: str = Depends(get_current_user)):
+    perm = await grant_permission(agent_id, req.permission, req.grant_type)
+    return perm
+
+
 @app.post("/agents/{agent_id}/permissions/{permission_id}/revoke")
 async def revoke_permission_endpoint(agent_id: str, permission_id: str, _user: str = Depends(get_current_user)):
     success = await revoke_permission(permission_id)
