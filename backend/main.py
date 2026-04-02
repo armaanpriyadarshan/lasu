@@ -15,11 +15,13 @@ from db import (
     get_user_by_phone, create_user, mark_user_verified, save_message,
     get_recent_messages, create_telegram_user, get_user_by_telegram,
     link_telegram, get_user_by_id,
+    create_agent, get_agents, get_agent, update_agent, delete_agent,
+    get_agent_messages, save_agent_message,
 )
-from agent import run_agent
+from agent import run_agent, run_agent_chat, generate_system_prompt
 from sms import send_sms, send_verification, check_verification
 from telegram import send_message as tg_send
-from models import PhoneRequest, VerifyRequest
+from models import PhoneRequest, VerifyRequest, CreateAgentRequest, UpdateAgentRequest, ChatRequest
 
 app = FastAPI()
 
@@ -151,6 +153,72 @@ async def telegram_callback(request: Request):
     user_id = user["id"]
     scheme = os.environ.get("APP_SCHEME", "lasu")
     return RedirectResponse(f"{scheme}://auth/telegram?user_id={user_id}")
+
+
+# --- Agent endpoints ---
+
+@app.post("/agents")
+async def create_agent_endpoint(req: CreateAgentRequest):
+    system_prompt = await generate_system_prompt(req.description)
+    try:
+        agent = await create_agent(req.user_id, req.name, req.description, system_prompt)
+    except ValueError as e:
+        raise HTTPException(status_code=403, detail=str(e))
+    return agent
+
+
+@app.get("/agents")
+async def list_agents(user_id: str):
+    agents = await get_agents(user_id)
+    return {"agents": agents}
+
+
+@app.get("/agents/{agent_id}")
+async def get_agent_endpoint(agent_id: str):
+    agent = await get_agent(agent_id)
+    if not agent:
+        raise HTTPException(status_code=404, detail="Agent not found")
+    return agent
+
+
+@app.patch("/agents/{agent_id}")
+async def update_agent_endpoint(agent_id: str, req: UpdateAgentRequest):
+    updates = req.model_dump(exclude_none=True)
+    if not updates:
+        raise HTTPException(status_code=400, detail="No fields to update")
+    agent = await update_agent(agent_id, updates)
+    if not agent:
+        raise HTTPException(status_code=404, detail="Agent not found")
+    return agent
+
+
+@app.delete("/agents/{agent_id}")
+async def delete_agent_endpoint(agent_id: str):
+    success = await delete_agent(agent_id)
+    if not success:
+        raise HTTPException(status_code=404, detail="Agent not found")
+    return {"ok": True}
+
+
+@app.post("/agents/{agent_id}/chat")
+async def chat_with_agent(agent_id: str, req: ChatRequest):
+    agent = await get_agent(agent_id)
+    if not agent:
+        raise HTTPException(status_code=404, detail="Agent not found")
+
+    await save_agent_message(agent_id, req.user_id, "user", req.message)
+
+    reply = await run_agent_chat(agent_id, req.message)
+
+    await save_agent_message(agent_id, req.user_id, "assistant", reply)
+
+    return {"reply": reply}
+
+
+@app.get("/agents/{agent_id}/messages")
+async def get_agent_messages_endpoint(agent_id: str, limit: int = 50):
+    messages = await get_agent_messages(agent_id, limit)
+    return {"messages": messages}
 
 
 # --- User info ---
