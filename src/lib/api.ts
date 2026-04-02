@@ -189,3 +189,53 @@ export async function revokePermission(agentId: string, permissionId: string) {
   if (!res.ok) throw new Error('Failed to revoke permission')
   return res.json() as Promise<{ ok: boolean }>
 }
+
+// ── Job types ──
+
+export type AgentJob = {
+  id: string
+  agent_id: string
+  job_type: string
+  schedule_ms: number
+  active_hours_start: string | null
+  active_hours_end: string | null
+  last_run: string | null
+  next_run: string | null
+  enabled: boolean
+  config: Record<string, unknown>
+  created_at: string
+}
+
+// ── Job API ──
+
+export async function createJob(agentId: string, scheduleMins: number = 30) {
+  const res = await fetch(`${API_URL}/agents/${agentId}/jobs`, {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({ schedule_ms: scheduleMins * 60 * 1000 }),
+  })
+  if (!res.ok) throw new Error('Failed to create job')
+  return res.json() as Promise<AgentJob>
+}
+
+export async function getJobs(agentId: string) {
+  const res = await fetch(`${API_URL}/agents/${agentId}/jobs`)
+  if (!res.ok) throw new Error('Failed to fetch jobs')
+  return res.json() as Promise<{ jobs: AgentJob[] }>
+}
+
+export async function updateJob(agentId: string, jobId: string, updates: { schedule_ms?: number; enabled?: boolean; active_hours_start?: string; active_hours_end?: string }) {
+  const res = await fetch(`${API_URL}/agents/${agentId}/jobs/${jobId}`, {
+    method: 'PATCH',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify(updates),
+  })
+  if (!res.ok) throw new Error('Failed to update job')
+  return res.json() as Promise<AgentJob>
+}
+
+export async function deleteJob(agentId: string, jobId: string) {
+  const res = await fetch(`${API_URL}/agents/${agentId}/jobs/${jobId}`, { method: 'DELETE' })
+  if (!res.ok) throw new Error('Failed to delete job')
+  return res.json() as Promise<{ ok: boolean }>
+}
