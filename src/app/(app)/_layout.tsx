@@ -29,9 +29,9 @@ type NavItem = { key: string; label: string; icon: IconName }
 
 const NAV_ITEMS: NavItem[] = [
   { key: 'dashboard', label: 'dashboard', icon: 'grid' },
+  { key: 'agents', label: 'agents', icon: 'star' },
   { key: 'channels', label: 'channels', icon: 'globe' },
   { key: 'memory', label: 'memory', icon: 'bookmark' },
-  { key: 'skills', label: 'skills', icon: 'star' },
   { key: 'settings', label: 'settings', icon: 'gear' },
 ]
 
@@ -147,7 +147,12 @@ export default function AppLayout() {
     )
   }
 
-  const activeKey = pathname === '/' || pathname === '/(app)' ? 'dashboard' : pathname.replace('/', '')
+  const activeKey = (() => {
+    if (pathname === '/' || pathname === '/(app)') return 'dashboard'
+    if (pathname.startsWith('/chat/') || pathname.startsWith('/(app)/chat/')) return 'agents'
+    const segment = pathname.replace('/(app)/', '').replace('/', '')
+    return segment || 'dashboard'
+  })()
 
   return (
     <View style={[styles.shell, isDesktop && styles.shellDesktop]}>
@@ -170,7 +175,10 @@ export default function AppLayout() {
               return (
                 <Pressable
                   key={item.key}
-
+                  onPress={() => {
+                    if (item.key === 'dashboard') router.push('/(app)')
+                    else router.push(`/(app)/${item.key}`)
+                  }}
                   dataSet={!active ? { hover: 'vellum' } : undefined}
                   style={({ pressed }) => [
                     styles.navItem,
@@ -229,6 +237,10 @@ export default function AppLayout() {
             return (
               <Pressable
                 key={item.key}
+                onPress={() => {
+                  if (item.key === 'dashboard') router.push('/(app)')
+                  else router.push(`/(app)/${item.key}`)
+                }}
                 style={({ pressed }) => [
                   styles.tab,
                   pressed && { opacity: 0.5 },
