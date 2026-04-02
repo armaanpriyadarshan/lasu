@@ -214,6 +214,21 @@ The **non-resetting free tier** lets users genuinely try the product but natural
 
 ---
 
+## Planned: Dynamic Tool Discovery & Expansion
+
+Agents should not be limited to the tools Sudo ships with. A **dynamic capability system** allows agents to discover, install, and use new tools at runtime — expanding their abilities without platform redeployment.
+
+**Vision:**
+- **Tool marketplace/directory** — a registry of published tools (first-party and community) that agents can browse
+- **Runtime tool loader** — agents can install and execute tools from the directory on demand, without a backend redeploy
+- **Autonomous tool discovery** — when an agent encounters a task it can't handle with its current tools, it can search the marketplace for a relevant capability ("I need to book a restaurant... let me find a tool for that")
+- **Sandboxed execution** — critical since agents would be running third-party code; each tool runs in an isolated environment
+- **User approval** — installing a new tool requires user permission (fits the deny-by-default model)
+
+This is analogous to OpenClaw's ClaWHub skills system, but consumer-friendly — users never see a CLI or config file, they just see "Atlas wants to install Restaurant Booking. Allow?"
+
+---
+
 ## Open Questions
 
 - **Voice integration:** Which platform/approach for agent-initiated voice calls?
