@@ -72,6 +72,8 @@ export default function ChatScreen() {
       const { reply } = await chatWithAgent(agentId, userId, text)
       const assistantMsg: AgentMessage = { role: 'assistant', content: reply, created_at: new Date().toISOString() }
       setMessages((prev) => [...prev, assistantMsg])
+      // Refresh memories after each turn (extraction happens server-side)
+      getAgentMemories(agentId).then(({ memories }) => setMemories(memories)).catch(() => {})
     } catch {
       const errMsg: AgentMessage = { role: 'assistant', content: 'Something went wrong. Try again.', created_at: new Date().toISOString() }
       setMessages((prev) => [...prev, errMsg])
