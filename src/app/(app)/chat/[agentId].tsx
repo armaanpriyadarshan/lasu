@@ -182,7 +182,7 @@ export default function ChatScreen() {
           </Pressable>
           <Pressable onPress={() => { setShowPermissions(!showPermissions); setShowMemory(false) }}>
             <ThemedText style={{ color: showPermissions ? C.tide : C.pencil, fontSize: 11 }}>
-              {permissions.length > 0 ? `Perms (${permissions.length})` : 'Perms'}
+              {permissions.filter((p) => p.grant_type === 'permanent').length > 0 ? `Perms (${permissions.filter((p) => p.grant_type === 'permanent').length})` : 'Perms'}
             </ThemedText>
           </Pressable>
           <Pressable onPress={() => { setShowMemory(!showMemory); setShowPermissions(false) }}>
@@ -232,14 +232,14 @@ export default function ChatScreen() {
               No permissions granted yet.
             </ThemedText>
           ) : (
-            permissions.map((perm) => (
+            permissions.filter((p) => p.grant_type === 'permanent').map((perm) => (
               <View key={perm.id} style={styles.memoryItem}>
                 <View style={styles.memoryContent}>
                   <ThemedText style={[styles.memoryKey, { color: C.graphite }]}>
                     {perm.permission}
                   </ThemedText>
                   <ThemedText style={[styles.memoryValue, { color: C.fadedInk }]}>
-                    {perm.grant_type === 'permanent' ? 'Always allowed' : 'One-time'}
+                    Always allowed
                   </ThemedText>
                 </View>
                 <Pressable onPress={() => handleRevokePermission(perm.id)} style={styles.memoryDelete}>
