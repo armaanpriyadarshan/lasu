@@ -5,6 +5,7 @@ import {
   KeyboardAvoidingView,
   Platform,
   Pressable,
+  ScrollView,
   StyleSheet,
   TextInput,
   View,
@@ -119,7 +120,7 @@ export default function ChatScreen() {
       </Animated.View>
 
       {showMemory && (
-        <View style={styles.memoryPanel}>
+        <ScrollView style={styles.memoryPanel}>
           <ThemedText serif style={[styles.memoryTitle, { color: C.ink }]}>
             What {agent?.name} remembers
           </ThemedText>
@@ -144,7 +145,7 @@ export default function ChatScreen() {
               </View>
             ))
           )}
-        </View>
+        </ScrollView>
       )}
 
       {/* Messages */}
@@ -319,7 +320,7 @@ const styles = StyleSheet.create({
     borderBottomWidth: 0.5,
     borderBottomColor: C.ruledLine,
     padding: 16,
-    maxHeight: 250,
+    height: 220,
   },
   memoryTitle: {
     fontSize: 16,
