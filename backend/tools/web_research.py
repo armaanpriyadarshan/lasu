@@ -5,19 +5,15 @@ from tools import register_tool
 
 
 async def web_search(query: str, max_results: int = 5) -> str:
-    api_key = os.environ.get("TAVILY_API_KEY")
+    api_key = os.environ.get("BRAVE_API_KEY")
     if not api_key:
-        return "Error: TAVILY_API_KEY not configured"
+        return "Error: BRAVE_API_KEY not configured"
 
     async with httpx.AsyncClient() as client:
-        response = await client.post(
-            "https://api.tavily.com/search",
-            json={
-                "api_key": api_key,
-                "query": query,
-                "max_results": max_results,
-                "include_answer": True,
-            },
+        response = await client.get(
+            "https://api.search.brave.com/res/v1/web/search",
+            params={"q": query, "count": max_results},
+            headers={"X-Subscription-Token": api_key, "Accept": "application/json"},
             timeout=15.0,
         )
 
@@ -27,11 +23,8 @@ async def web_search(query: str, max_results: int = 5) -> str:
     data = response.json()
     results = []
 
-    if data.get("answer"):
-        results.append(f"Summary: {data['answer']}")
-
-    for r in data.get("results", []):
-        results.append(f"- {r['title']}: {r.get('content', '')[:200]} ({r['url']})")
+    for r in data.get("web", {}).get("results", []):
+        results.append(f"- {r.get('title', '')}: {r.get('description', '')[:200]} ({r.get('url', '')})")
 
     return "\n".join(results) if results else "No results found."
 
