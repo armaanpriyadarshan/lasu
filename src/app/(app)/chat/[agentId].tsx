@@ -1,8 +1,9 @@
-import React, { useCallback, useRef, useState } from 'react'
+import React, { useCallback, useEffect, useRef, useState } from 'react'
 import {
   ActivityIndicator,
   FlatList,
   KeyboardAvoidingView,
+  Modal,
   Platform,
   Pressable,
   ScrollView,
@@ -29,6 +30,61 @@ import {
 
 const C = Colors.light
 const isWeb = Platform.OS === 'web'
+
+function renderMarkdown(text: string, color: string) {
+  if (!isWeb) {
+    return <ThemedText style={[styles.bubbleText, { color }]}>{text}</ThemedText>
+  }
+  // Simple markdown → HTML
+  let html = text
+    .replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;')
+    // code blocks
+    .replace(/```(\w*)\n([\s\S]*?)```/g, '<pre style="background:#EBE5D5;padding:10px 12px;border-radius:6px;overflow-x:auto;font-family:var(--font-mono);font-size:12px;margin:6px 0;white-space:pre-wrap">$2</pre>')
+    // inline code
+    .replace(/`([^`]+)`/g, '<code style="background:#EBE5D5;padding:1px 5px;border-radius:3px;font-family:var(--font-mono);font-size:12px">$1</code>')
+    // bold
+    .replace(/\*\*(.+?)\*\*/g, '<strong>$1</strong>')
+    // italic
+    .replace(/\*(.+?)\*/g, '<em>$1</em>')
+    // unordered lists
+    .replace(/^[-•] (.+)$/gm, '<li style="margin-left:16px;margin-bottom:2px">$1</li>')
+    // newlines (but not inside pre)
+    .replace(/\n/g, '<br/>')
+  return React.createElement('div', {
+    style: { color, fontSize: 14, lineHeight: '22px', fontFamily: 'var(--font-display)', wordBreak: 'break-word' },
+    dangerouslySetInnerHTML: { __html: html },
+  })
+}
+
+function TypingDots() {
+  const [dots, setDots] = useState('.')
+  useEffect(() => {
+    const interval = setInterval(() => {
+      setDots((d) => (d.length >= 3 ? '.' : d + '.'))
+    }, 400)
+    return () => clearInterval(interval)
+  }, [])
+  return (
+    <View style={[typingStyles.bubble]}>
+      <ThemedText style={[typingStyles.dots, { color: C.pencil }]}>{dots}</ThemedText>
+    </View>
+  )
+}
+
+const typingStyles = StyleSheet.create({
+  bubble: {
+    alignSelf: 'flex-start',
+    paddingVertical: 10,
+    paddingHorizontal: 14,
+    marginBottom: 8,
+  },
+  dots: {
+    fontSize: 18,
+    fontWeight: '400',
+    letterSpacing: 2,
+    ...(isWeb && { fontFamily: 'var(--font-mono)' } as any),
+  },
+})
 
 export default function ChatScreen() {
   const { agentId } = useLocalSearchParams<{ agentId: string }>()
@@ -160,62 +216,93 @@ export default function ChatScreen() {
       keyboardVerticalOffset={90}
     >
 
-      {/* Expandable panels */}
-      {panel === 'memory' && (
-        <Animated.View entering={FadeIn.duration(200)}>
-          <ScrollView style={styles.panel}>
-            {memories.length === 0 ? (
-              <ThemedText style={[styles.panelEmpty, { color: C.pencil }]}>
-                No memories yet. Chat more and {agent?.name} will learn about you.
+      {/* Memory modal */}
+      <Modal
+        visible={panel === 'memory'}
+        transparent
+        animationType="fade"
+        onRequestClose={() => setPanel('none')}
+      >
+        <Pressable style={styles.modalOverlay} onPress={() => setPanel('none')}>
+          <Pressable style={styles.modalContent} onPress={(e) => e.stopPropagation()}>
+            <View style={styles.modalHeader}>
+              <ThemedText serif style={[styles.modalTitle, { color: C.ink }]}>
+                Memory
               </ThemedText>
-            ) : (
-              memories.map((mem) => (
-                <View key={mem.id} style={styles.panelItem}>
-                  <View style={styles.panelItemContent}>
-                    <ThemedText style={[styles.panelKey, { color: C.graphite }]}>
-                      {mem.key.replace(/_/g, ' ')}
-                    </ThemedText>
-                    <ThemedText style={[styles.panelValue, { color: C.fadedInk }]}>
-                      {mem.value}
-                    </ThemedText>
+              <Pressable onPress={() => setPanel('none')} style={styles.modalClose}>
+                <ThemedText style={{ color: C.pencil, fontSize: 18 }}>×</ThemedText>
+              </Pressable>
+            </View>
+            <ScrollView style={styles.modalScroll}>
+              {memories.length === 0 ? (
+                <ThemedText style={[styles.panelEmpty, { color: C.pencil }]}>
+                  No memories yet. Chat more and {agent?.name} will learn about you.
+                </ThemedText>
+              ) : (
+                memories.map((mem) => (
+                  <View key={mem.id} style={styles.panelItem}>
+                    <View style={styles.panelItemContent}>
+                      <ThemedText style={[styles.panelKey, { color: C.graphite }]}>
+                        {mem.key.replace(/_/g, ' ')}
+                      </ThemedText>
+                      <ThemedText style={[styles.panelValue, { color: C.fadedInk }]}>
+                        {mem.value}
+                      </ThemedText>
+                    </View>
+                    <Pressable onPress={() => handleDeleteMemory(mem.id)} style={styles.panelAction}>
+                      <ThemedText style={{ color: C.pencil, fontSize: 12 }}>×</ThemedText>
+                    </Pressable>
                   </View>
-                  <Pressable onPress={() => handleDeleteMemory(mem.id)} style={styles.panelAction}>
-                    <ThemedText style={{ color: C.pencil, fontSize: 12 }}>×</ThemedText>
-                  </Pressable>
-                </View>
-              ))
-            )}
-          </ScrollView>
-        </Animated.View>
-      )}
+                ))
+              )}
+            </ScrollView>
+          </Pressable>
+        </Pressable>
+      </Modal>
 
-      {panel === 'permissions' && (
-        <Animated.View entering={FadeIn.duration(200)}>
-          <ScrollView style={styles.panel}>
-            {permCount === 0 ? (
-              <ThemedText style={[styles.panelEmpty, { color: C.pencil }]}>
-                No permissions granted yet.
+      {/* Permissions modal */}
+      <Modal
+        visible={panel === 'permissions'}
+        transparent
+        animationType="fade"
+        onRequestClose={() => setPanel('none')}
+      >
+        <Pressable style={styles.modalOverlay} onPress={() => setPanel('none')}>
+          <Pressable style={styles.modalContent} onPress={(e) => e.stopPropagation()}>
+            <View style={styles.modalHeader}>
+              <ThemedText serif style={[styles.modalTitle, { color: C.ink }]}>
+                Permissions
               </ThemedText>
-            ) : (
-              permissions.filter((p) => !p.revoked_at).map((perm) => (
-                <View key={perm.id} style={styles.panelItem}>
-                  <View style={styles.panelItemContent}>
-                    <ThemedText style={[styles.panelKey, { color: C.graphite }]}>
-                      {perm.permission}
-                    </ThemedText>
-                    <ThemedText style={[styles.panelValue, { color: C.fadedInk }]}>
-                      {perm.grant_type === 'permanent' ? 'Always allowed' : 'One-time'}
-                    </ThemedText>
+              <Pressable onPress={() => setPanel('none')} style={styles.modalClose}>
+                <ThemedText style={{ color: C.pencil, fontSize: 18 }}>×</ThemedText>
+              </Pressable>
+            </View>
+            <ScrollView style={styles.modalScroll}>
+              {permCount === 0 ? (
+                <ThemedText style={[styles.panelEmpty, { color: C.pencil }]}>
+                  No permissions granted yet.
+                </ThemedText>
+              ) : (
+                permissions.filter((p) => !p.revoked_at).map((perm) => (
+                  <View key={perm.id} style={styles.panelItem}>
+                    <View style={styles.panelItemContent}>
+                      <ThemedText style={[styles.panelKey, { color: C.graphite }]}>
+                        {perm.permission}
+                      </ThemedText>
+                      <ThemedText style={[styles.panelValue, { color: C.fadedInk }]}>
+                        {perm.grant_type === 'permanent' ? 'Always allowed' : 'One-time'}
+                      </ThemedText>
+                    </View>
+                    <Pressable onPress={() => handleRevokePermission(perm.id)} style={styles.panelAction}>
+                      <ThemedText style={{ color: C.waxSeal, fontSize: 11 }}>Revoke</ThemedText>
+                    </Pressable>
                   </View>
-                  <Pressable onPress={() => handleRevokePermission(perm.id)} style={styles.panelAction}>
-                    <ThemedText style={{ color: C.waxSeal, fontSize: 11 }}>Revoke</ThemedText>
-                  </Pressable>
-                </View>
-              ))
-            )}
-          </ScrollView>
-        </Animated.View>
-      )}
+                ))
+              )}
+            </ScrollView>
+          </Pressable>
+        </Pressable>
+      </Modal>
 
       {/* Messages */}
       <FlatList
@@ -285,11 +372,16 @@ export default function ChatScreen() {
         }
         renderItem={({ item }) => (
           <View style={[styles.bubble, item.role === 'user' ? styles.bubbleUser : styles.bubbleAgent]}>
-            <ThemedText style={[styles.bubbleText, { color: item.role === 'user' ? C.white : C.fadedInk }]}>
-              {item.content}
-            </ThemedText>
+            {item.role === 'user' ? (
+              <ThemedText style={[styles.bubbleText, { color: C.white }]}>
+                {item.content}
+              </ThemedText>
+            ) : (
+              renderMarkdown(item.content, C.fadedInk)
+            )}
           </View>
         )}
+        ListFooterComponent={sending ? <TypingDots /> : null}
       />
 
       {/* Permission requests */}
@@ -431,12 +523,45 @@ const styles = StyleSheet.create({
     ...(isWeb && { fontFamily: 'var(--font-mono)' } as any),
   },
 
-  // ── Expandable panels ──
-  panel: {
-    backgroundColor: C.agedPaper,
-    paddingVertical: 12,
-    paddingHorizontal: 16,
-    maxHeight: 280,
+  // ── Modals ──
+  modalOverlay: {
+    flex: 1,
+    backgroundColor: 'rgba(26, 26, 24, 0.4)',
+    justifyContent: 'center',
+    alignItems: 'center',
+    padding: 24,
+  },
+  modalContent: {
+    backgroundColor: C.parchment,
+    borderRadius: 12,
+    width: '100%',
+    maxWidth: 480,
+    maxHeight: '70%',
+    overflow: 'hidden',
+  },
+  modalHeader: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    alignItems: 'center',
+    paddingVertical: 16,
+    paddingHorizontal: 20,
+  },
+  modalTitle: {
+    fontSize: 18,
+    fontWeight: '400',
+    ...(isWeb && { fontFamily: 'var(--font-serif)' } as any),
+  },
+  modalClose: {
+    width: 28,
+    height: 28,
+    borderRadius: 6,
+    alignItems: 'center',
+    justifyContent: 'center',
+    ...(isWeb && { cursor: 'pointer' } as any),
+  },
+  modalScroll: {
+    paddingHorizontal: 20,
+    paddingBottom: 20,
   },
   panelEmpty: {
     fontSize: 13,
