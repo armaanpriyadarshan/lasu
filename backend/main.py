@@ -117,7 +117,11 @@ async def chat_with_agent(agent_id: str, req: ChatRequest):
 
     await save_agent_message(agent_id, req.user_id, "user", req.message)
 
-    reply = await run_agent_chat(agent_id, req.message)
+    result = await run_agent_chat(agent_id, req.message)
+
+    reply = result["reply"]
+    tool_calls = result.get("tool_calls", [])
+    perm_requests = result.get("permission_requests", [])
 
     await save_agent_message(agent_id, req.user_id, "assistant", reply)
 
@@ -130,7 +134,11 @@ async def chat_with_agent(agent_id: str, req: ChatRequest):
     except Exception:
         pass
 
-    return {"reply": reply}
+    return {
+        "reply": reply,
+        "tool_calls": tool_calls,
+        "permission_requests": perm_requests,
+    }
 
 
 @app.get("/agents/{agent_id}/messages")
