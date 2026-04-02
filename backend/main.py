@@ -110,7 +110,8 @@ async def chat_with_agent(agent_id: str, req: ChatRequest):
 
     # Extract and save memories (non-critical, don't fail the response)
     try:
-        memories = await extract_memories(req.message, reply)
+        existing = await get_agent_memories(agent_id)
+        memories = await extract_memories(req.message, reply, existing)
         for mem in memories:
             await upsert_memory(agent_id, mem["key"], mem["value"])
     except Exception:

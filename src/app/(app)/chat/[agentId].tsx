@@ -320,7 +320,7 @@ const styles = StyleSheet.create({
     borderBottomWidth: 0.5,
     borderBottomColor: C.ruledLine,
     padding: 16,
-    height: 220,
+    height: 440,
   },
   memoryTitle: {
     fontSize: 16,
