@@ -80,3 +80,44 @@ async def run_agent(user_id: str, user_message: str) -> str:
     )
 
     return response.choices[0].message.content
+
+
+HEARTBEAT_PROMPT = """You are checking in on behalf of this user. Review what you know about them and any recent context.
+
+If you have something useful to proactively share — a reminder, a follow-up, a suggestion, or an observation — respond with it concisely.
+
+If there's nothing worth mentioning right now, respond with exactly: HEARTBEAT_OK
+
+Do not make up tasks or fabricate urgency. Only speak if you have something genuinely useful to say."""
+
+
+async def run_heartbeat(agent_id: str) -> str | None:
+    agent = await get_agent(agent_id)
+    if not agent:
+        return None
+
+    system_prompt = agent.get("system_prompt") or DEFAULT_SYSTEM_PROMPT
+
+    memories = await get_agent_memories(agent_id)
+    if memories:
+        memory_text = "\n".join(f"- {m['key']}: {m['value']}" for m in memories)
+        system_prompt += f"\n\nThings you remember about this user:\n{memory_text}"
+
+    history = await get_agent_messages(agent_id, limit=5)
+
+    messages = [{"role": "system", "content": system_prompt}]
+    messages.extend({"role": m["role"], "content": m["content"]} for m in history)
+    messages.append({"role": "user", "content": HEARTBEAT_PROMPT})
+
+    response = _get_client().chat.completions.create(
+        model=agent.get("model", "gpt-4o-mini"),
+        max_completion_tokens=300,
+        messages=messages,
+    )
+
+    reply = response.choices[0].message.content.strip()
+
+    if reply == "HEARTBEAT_OK" or not reply:
+        return None
+
+    return reply
