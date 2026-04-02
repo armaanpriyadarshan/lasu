@@ -6,6 +6,7 @@ type AuthState = {
   userId: string | null
   session: Session | null
   loading: boolean
+  accessToken: string | null
   signUp: (email: string, password: string) => Promise<void>
   signIn: (email: string, password: string) => Promise<void>
   signInWithGoogle: () => Promise<void>
@@ -16,6 +17,7 @@ const AuthContext = createContext<AuthState>({
   userId: null,
   session: null,
   loading: true,
+  accessToken: null,
   signUp: async () => {},
   signIn: async () => {},
   signInWithGoogle: async () => {},
@@ -63,9 +65,10 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
   }
 
   const userId = session?.user?.id ?? null
+  const accessToken = session?.access_token ?? null
 
   return (
-    <AuthContext.Provider value={{ userId, session, loading, signUp, signIn, signInWithGoogle, signOut }}>
+    <AuthContext.Provider value={{ userId, session, loading, accessToken, signUp, signIn, signInWithGoogle, signOut }}>
       {children}
     </AuthContext.Provider>
   )

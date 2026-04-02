@@ -26,7 +26,7 @@ You know them deeply and respond with that context. You are concise, direct, and
 Never use filler. Respond like a trusted assistant who knows this person well.
 
 Keep responses concise. Prioritize usefulness over brevity.
-Do not use markdown formatting. Plain text only."""
+You may use markdown formatting: **bold**, *italic*, `code`, ```code blocks```, and bullet lists."""
 
 
 async def generate_system_prompt(description: str) -> str:

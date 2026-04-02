@@ -85,11 +85,24 @@ input:focus {
   transform: translateY(0);
   box-shadow: none;
 }
+[data-hover="menuTrigger"] {
+  transition: background-color 150ms ease;
+  border-radius: 6px;
+}
+[data-hover="menuTrigger"]:hover {
+  background-color: rgba(224, 218, 200, 0.5) !important;
+}
 [data-hover="darken"] {
   transition: filter 150ms ease;
 }
 [data-hover="darken"]:hover {
   filter: brightness(0.3) !important;
+}
+[data-hover="border"] {
+  transition: background-color 150ms ease;
+}
+[data-hover="border"]:hover {
+  background-color: #EBE5D5 !important;
 }
 [data-hover="dim"] {
   transition: opacity 150ms ease;

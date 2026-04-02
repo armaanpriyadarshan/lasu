@@ -1,24 +1,48 @@
-export const API_URL = __DEV__ ? 'http://localhost:8001' : 'https://your-railway-url.railway.app'
+import { supabase } from './supabase'
 
-export async function sendMessage(userId: string, content: string, token: string) {
-  const res = await fetch(`${API_URL}/message`, {
+export const API_URL = __DEV__ ? 'http://localhost:8000' : 'https://your-railway-url.railway.app'
+
+async function authFetch(url: string, opts: RequestInit = {}): Promise<Response> {
+  const { data: { session } } = await supabase.auth.getSession()
+  const token = session?.access_token
+  const headers: Record<string, string> = {
+    ...(opts.headers as Record<string, string> ?? {}),
+  }
+  if (token) headers['Authorization'] = `Bearer ${token}`
+  return fetch(url, { ...opts, headers })
+}
+
+// ── Messages ──
+
+export async function sendMessage(userId: string, content: string) {
+  const res = await authFetch(`${API_URL}/message`, {
     method: 'POST',
-    headers: {
-      'Content-Type': 'application/json',
-      'Authorization': `Bearer ${token}`,
-    },
+    headers: { 'Content-Type': 'application/json' },
     body: JSON.stringify({ user_id: userId, content }),
   })
   if (!res.ok) throw new Error('Failed to send message')
   return res.json() as Promise<{ reply: string }>
 }
 
-export async function getMessages(userId: string, token: string) {
-  const res = await fetch(`${API_URL}/messages/${userId}`, {
-    headers: { 'Authorization': `Bearer ${token}` },
-  })
+export async function getMessages(userId: string) {
+  const res = await authFetch(`${API_URL}/messages/${userId}`)
   if (!res.ok) throw new Error('Failed to fetch messages')
   return res.json() as Promise<{ messages: { role: string; content: string }[] }>
+}
+
+// ── Dashboard ──
+
+export type DashboardStats = {
+  messages_today: number
+  active_agents: number
+  total_memories: number
+  activity: { id: string; text: string; role: string; created_at: string; agent_name: string }[]
+}
+
+export async function getDashboard(userId: string) {
+  const res = await authFetch(`${API_URL}/dashboard/${userId}`)
+  if (!res.ok) throw new Error('Failed to fetch dashboard')
+  return res.json() as Promise<DashboardStats>
 }
 
 // ── Agent types ──
@@ -30,6 +54,8 @@ export type Agent = {
   description: string
   system_prompt: string
   model: string
+  emoji: string
+  tone: string
   is_active: boolean
   created_at: string
   updated_at: string
@@ -43,11 +69,11 @@ export type AgentMessage = {
 
 // ── Agent API ──
 
-export async function createAgent(userId: string, name: string, description: string) {
-  const res = await fetch(`${API_URL}/agents`, {
+export async function createAgent(userId: string, name: string, description: string, emoji = '🤖', tone = 'balanced') {
+  const res = await authFetch(`${API_URL}/agents`, {
     method: 'POST',
     headers: { 'Content-Type': 'application/json' },
-    body: JSON.stringify({ user_id: userId, name, description }),
+    body: JSON.stringify({ user_id: userId, name, description, emoji, tone }),
   })
   if (!res.ok) {
     const err = await res.json().catch(() => ({ detail: 'Failed to create agent' }))
@@ -57,19 +83,19 @@ export async function createAgent(userId: string, name: string, description: str
 }
 
 export async function listAgents(userId: string) {
-  const res = await fetch(`${API_URL}/agents?user_id=${userId}`)
+  const res = await authFetch(`${API_URL}/agents?user_id=${userId}`)
   if (!res.ok) throw new Error('Failed to fetch agents')
   return res.json() as Promise<{ agents: Agent[] }>
 }
 
 export async function getAgent(agentId: string) {
-  const res = await fetch(`${API_URL}/agents/${agentId}`)
+  const res = await authFetch(`${API_URL}/agents/${agentId}`)
   if (!res.ok) throw new Error('Failed to fetch agent')
   return res.json() as Promise<Agent>
 }
 
 export async function updateAgent(agentId: string, updates: { name?: string; description?: string; system_prompt?: string }) {
-  const res = await fetch(`${API_URL}/agents/${agentId}`, {
+  const res = await authFetch(`${API_URL}/agents/${agentId}`, {
     method: 'PATCH',
     headers: { 'Content-Type': 'application/json' },
     body: JSON.stringify(updates),
@@ -79,13 +105,13 @@ export async function updateAgent(agentId: string, updates: { name?: string; des
 }
 
 export async function deleteAgent(agentId: string) {
-  const res = await fetch(`${API_URL}/agents/${agentId}`, { method: 'DELETE' })
+  const res = await authFetch(`${API_URL}/agents/${agentId}`, { method: 'DELETE' })
   if (!res.ok) throw new Error('Failed to delete agent')
   return res.json() as Promise<{ ok: boolean }>
 }
 
 export async function chatWithAgent(agentId: string, userId: string, message: string) {
-  const res = await fetch(`${API_URL}/agents/${agentId}/chat`, {
+  const res = await authFetch(`${API_URL}/agents/${agentId}/chat`, {
     method: 'POST',
     headers: { 'Content-Type': 'application/json' },
     body: JSON.stringify({ user_id: userId, message }),
@@ -95,7 +121,7 @@ export async function chatWithAgent(agentId: string, userId: string, message: st
 }
 
 export async function getAgentMessages(agentId: string, limit = 50) {
-  const res = await fetch(`${API_URL}/agents/${agentId}/messages?limit=${limit}`)
+  const res = await authFetch(`${API_URL}/agents/${agentId}/messages?limit=${limit}`)
   if (!res.ok) throw new Error('Failed to fetch messages')
   return res.json() as Promise<{ messages: AgentMessage[] }>
 }
@@ -116,13 +142,13 @@ export type AgentMemory = {
 // ── Memory API ──
 
 export async function getAgentMemories(agentId: string) {
-  const res = await fetch(`${API_URL}/agents/${agentId}/memory`)
+  const res = await authFetch(`${API_URL}/agents/${agentId}/memory`)
   if (!res.ok) throw new Error('Failed to fetch memories')
   return res.json() as Promise<{ memories: AgentMemory[] }>
 }
 
 export async function deleteAgentMemory(agentId: string, memoryId: string) {
-  const res = await fetch(`${API_URL}/agents/${agentId}/memory/${memoryId}`, { method: 'DELETE' })
+  const res = await authFetch(`${API_URL}/agents/${agentId}/memory/${memoryId}`, { method: 'DELETE' })
   if (!res.ok) throw new Error('Failed to delete memory')
   return res.json() as Promise<{ ok: boolean }>
 }
@@ -153,19 +179,19 @@ export type PermissionRequest = {
 // ── Permission API ──
 
 export async function getAgentPermissions(agentId: string) {
-  const res = await fetch(`${API_URL}/agents/${agentId}/permissions`)
+  const res = await authFetch(`${API_URL}/agents/${agentId}/permissions`)
   if (!res.ok) throw new Error('Failed to fetch permissions')
   return res.json() as Promise<{ permissions: AgentPermission[] }>
 }
 
 export async function getPendingRequests(agentId: string) {
-  const res = await fetch(`${API_URL}/agents/${agentId}/permissions/requests`)
+  const res = await authFetch(`${API_URL}/agents/${agentId}/permissions/requests`)
   if (!res.ok) throw new Error('Failed to fetch requests')
   return res.json() as Promise<{ requests: PermissionRequest[] }>
 }
 
 export async function grantPermissionRequest(agentId: string, requestId: string, grantType: 'one_time' | 'permanent') {
-  const res = await fetch(`${API_URL}/agents/${agentId}/permissions/requests/${requestId}/grant`, {
+  const res = await authFetch(`${API_URL}/agents/${agentId}/permissions/requests/${requestId}/grant`, {
     method: 'POST',
     headers: { 'Content-Type': 'application/json' },
     body: JSON.stringify({ grant_type: grantType }),
@@ -175,7 +201,7 @@ export async function grantPermissionRequest(agentId: string, requestId: string,
 }
 
 export async function denyPermissionRequest(agentId: string, requestId: string) {
-  const res = await fetch(`${API_URL}/agents/${agentId}/permissions/requests/${requestId}/deny`, {
+  const res = await authFetch(`${API_URL}/agents/${agentId}/permissions/requests/${requestId}/deny`, {
     method: 'POST',
   })
   if (!res.ok) throw new Error('Failed to deny permission')
@@ -183,7 +209,7 @@ export async function denyPermissionRequest(agentId: string, requestId: string) 
 }
 
 export async function revokePermission(agentId: string, permissionId: string) {
-  const res = await fetch(`${API_URL}/agents/${agentId}/permissions/${permissionId}/revoke`, {
+  const res = await authFetch(`${API_URL}/agents/${agentId}/permissions/${permissionId}/revoke`, {
     method: 'POST',
   })
   if (!res.ok) throw new Error('Failed to revoke permission')
@@ -209,7 +235,7 @@ export type AgentJob = {
 // ── Job API ──
 
 export async function createJob(agentId: string, scheduleMins: number = 30) {
-  const res = await fetch(`${API_URL}/agents/${agentId}/jobs`, {
+  const res = await authFetch(`${API_URL}/agents/${agentId}/jobs`, {
     method: 'POST',
     headers: { 'Content-Type': 'application/json' },
     body: JSON.stringify({ schedule_ms: scheduleMins * 60 * 1000 }),
@@ -219,13 +245,13 @@ export async function createJob(agentId: string, scheduleMins: number = 30) {
 }
 
 export async function getJobs(agentId: string) {
-  const res = await fetch(`${API_URL}/agents/${agentId}/jobs`)
+  const res = await authFetch(`${API_URL}/agents/${agentId}/jobs`)
   if (!res.ok) throw new Error('Failed to fetch jobs')
   return res.json() as Promise<{ jobs: AgentJob[] }>
 }
 
 export async function updateJob(agentId: string, jobId: string, updates: { schedule_ms?: number; enabled?: boolean; active_hours_start?: string; active_hours_end?: string }) {
-  const res = await fetch(`${API_URL}/agents/${agentId}/jobs/${jobId}`, {
+  const res = await authFetch(`${API_URL}/agents/${agentId}/jobs/${jobId}`, {
     method: 'PATCH',
     headers: { 'Content-Type': 'application/json' },
     body: JSON.stringify(updates),
@@ -235,7 +261,7 @@ export async function updateJob(agentId: string, jobId: string, updates: { sched
 }
 
 export async function deleteJob(agentId: string, jobId: string) {
-  const res = await fetch(`${API_URL}/agents/${agentId}/jobs/${jobId}`, { method: 'DELETE' })
+  const res = await authFetch(`${API_URL}/agents/${agentId}/jobs/${jobId}`, { method: 'DELETE' })
   if (!res.ok) throw new Error('Failed to delete job')
   return res.json() as Promise<{ ok: boolean }>
 }

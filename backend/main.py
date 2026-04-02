@@ -2,7 +2,7 @@ import asyncio
 import os
 from contextlib import asynccontextmanager
 
-from fastapi import FastAPI, HTTPException, Request
+from fastapi import Depends, FastAPI, HTTPException, Request
 from fastapi.middleware.cors import CORSMiddleware
 from dotenv import load_dotenv
 
@@ -23,6 +23,7 @@ from agent import run_agent, run_agent_chat, generate_system_prompt
 from memory import extract_memories
 from models import MessageRequest, CreateAgentRequest, UpdateAgentRequest, ChatRequest, GrantPermissionRequest, CreateJobRequest, UpdateJobRequest
 from scheduler import scheduler_loop
+from auth import get_current_user
 
 
 @asynccontextmanager
@@ -46,14 +47,21 @@ def root():
     return {"status": "sudo running"}
 
 
+@app.get("/dashboard/{user_id}")
+async def dashboard(user_id: str, _user: str = Depends(get_current_user)):
+    from db import get_dashboard_stats
+    stats = await get_dashboard_stats(user_id)
+    return stats
+
+
 @app.get("/messages/{user_id}")
-async def messages(user_id: str):
+async def messages(user_id: str, _user: str = Depends(get_current_user)):
     rows = await get_recent_messages(user_id)
     return {"messages": rows}
 
 
 @app.post("/message")
-async def handle_message(req: MessageRequest):
+async def handle_message(req: MessageRequest, _user: str = Depends(get_current_user)):
     user = await get_or_create_user(req.user_id)
     if not user:
         raise HTTPException(status_code=404, detail="User not found")
@@ -68,24 +76,24 @@ async def handle_message(req: MessageRequest):
 # --- Agent endpoints ---
 
 @app.post("/agents")
-async def create_agent_endpoint(req: CreateAgentRequest):
+async def create_agent_endpoint(req: CreateAgentRequest, _user: str = Depends(get_current_user)):
     await get_or_create_user(req.user_id)
     system_prompt = await generate_system_prompt(req.description)
     try:
-        agent = await create_agent(req.user_id, req.name, req.description, system_prompt)
+        agent = await create_agent(req.user_id, req.name, req.description, system_prompt, req.emoji, req.tone)
     except ValueError as e:
         raise HTTPException(status_code=403, detail=str(e))
     return agent
 
 
 @app.get("/agents")
-async def list_agents(user_id: str):
+async def list_agents(user_id: str, _user: str = Depends(get_current_user)):
     agents = await get_agents(user_id)
     return {"agents": agents}
 
 
 @app.get("/agents/{agent_id}")
-async def get_agent_endpoint(agent_id: str):
+async def get_agent_endpoint(agent_id: str, _user: str = Depends(get_current_user)):
     agent = await get_agent(agent_id)
     if not agent:
         raise HTTPException(status_code=404, detail="Agent not found")
@@ -93,7 +101,7 @@ async def get_agent_endpoint(agent_id: str):
 
 
 @app.patch("/agents/{agent_id}")
-async def update_agent_endpoint(agent_id: str, req: UpdateAgentRequest):
+async def update_agent_endpoint(agent_id: str, req: UpdateAgentRequest, _user: str = Depends(get_current_user)):
     updates = req.model_dump(exclude_none=True)
     if not updates:
         raise HTTPException(status_code=400, detail="No fields to update")
@@ -104,7 +112,7 @@ async def update_agent_endpoint(agent_id: str, req: UpdateAgentRequest):
 
 
 @app.delete("/agents/{agent_id}")
-async def delete_agent_endpoint(agent_id: str):
+async def delete_agent_endpoint(agent_id: str, _user: str = Depends(get_current_user)):
     success = await delete_agent(agent_id)
     if not success:
         raise HTTPException(status_code=404, detail="Agent not found")
@@ -112,7 +120,7 @@ async def delete_agent_endpoint(agent_id: str):
 
 
 @app.post("/agents/{agent_id}/chat")
-async def chat_with_agent(agent_id: str, req: ChatRequest):
+async def chat_with_agent(agent_id: str, req: ChatRequest, _user: str = Depends(get_current_user)):
     agent = await get_agent(agent_id)
     if not agent:
         raise HTTPException(status_code=404, detail="Agent not found")
@@ -144,7 +152,7 @@ async def chat_with_agent(agent_id: str, req: ChatRequest):
 
 
 @app.get("/agents/{agent_id}/messages")
-async def get_agent_messages_endpoint(agent_id: str, limit: int = 50):
+async def get_agent_messages_endpoint(agent_id: str, limit: int = 50, _user: str = Depends(get_current_user)):
     messages = await get_agent_messages(agent_id, limit)
     return {"messages": messages}
 
@@ -152,13 +160,13 @@ async def get_agent_messages_endpoint(agent_id: str, limit: int = 50):
 # --- Memory endpoints ---
 
 @app.get("/agents/{agent_id}/memory")
-async def get_memories(agent_id: str):
+async def get_memories(agent_id: str, _user: str = Depends(get_current_user)):
     memories = await get_agent_memories(agent_id)
     return {"memories": memories}
 
 
 @app.delete("/agents/{agent_id}/memory/{memory_id}")
-async def delete_memory_endpoint(agent_id: str, memory_id: str):
+async def delete_memory_endpoint(agent_id: str, memory_id: str, _user: str = Depends(get_current_user)):
     success = await delete_memory(memory_id)
     if not success:
         raise HTTPException(status_code=404, detail="Memory not found")
@@ -168,19 +176,19 @@ async def delete_memory_endpoint(agent_id: str, memory_id: str):
 # --- Permission endpoints ---
 
 @app.get("/agents/{agent_id}/permissions")
-async def get_permissions(agent_id: str):
+async def get_permissions(agent_id: str, _user: str = Depends(get_current_user)):
     permissions = await get_agent_permissions(agent_id)
     return {"permissions": permissions}
 
 
 @app.get("/agents/{agent_id}/permissions/requests")
-async def get_permission_requests(agent_id: str):
+async def get_permission_requests(agent_id: str, _user: str = Depends(get_current_user)):
     requests = await get_pending_requests(agent_id)
     return {"requests": requests}
 
 
 @app.post("/agents/{agent_id}/permissions/requests/{request_id}/grant")
-async def grant_permission_endpoint(agent_id: str, request_id: str, req: GrantPermissionRequest):
+async def grant_permission_endpoint(agent_id: str, request_id: str, req: GrantPermissionRequest, _user: str = Depends(get_current_user)):
     if req.grant_type not in ("one_time", "permanent"):
         raise HTTPException(status_code=400, detail="grant_type must be 'one_time' or 'permanent'")
 
@@ -193,7 +201,7 @@ async def grant_permission_endpoint(agent_id: str, request_id: str, req: GrantPe
 
 
 @app.post("/agents/{agent_id}/permissions/requests/{request_id}/deny")
-async def deny_permission_endpoint(agent_id: str, request_id: str):
+async def deny_permission_endpoint(agent_id: str, request_id: str, _user: str = Depends(get_current_user)):
     resolved = await resolve_permission_request(request_id, "denied")
     if not resolved:
         raise HTTPException(status_code=404, detail="Request not found or already resolved")
@@ -201,7 +209,7 @@ async def deny_permission_endpoint(agent_id: str, request_id: str):
 
 
 @app.post("/agents/{agent_id}/permissions/{permission_id}/revoke")
-async def revoke_permission_endpoint(agent_id: str, permission_id: str):
+async def revoke_permission_endpoint(agent_id: str, permission_id: str, _user: str = Depends(get_current_user)):
     success = await revoke_permission(permission_id)
     if not success:
         raise HTTPException(status_code=404, detail="Permission not found or already revoked")
@@ -211,7 +219,7 @@ async def revoke_permission_endpoint(agent_id: str, permission_id: str):
 # --- Job endpoints ---
 
 @app.post("/agents/{agent_id}/jobs")
-async def create_job_endpoint(agent_id: str, req: CreateJobRequest):
+async def create_job_endpoint(agent_id: str, req: CreateJobRequest, _user: str = Depends(get_current_user)):
     agent = await get_agent(agent_id)
     if not agent:
         raise HTTPException(status_code=404, detail="Agent not found")
@@ -225,13 +233,13 @@ async def create_job_endpoint(agent_id: str, req: CreateJobRequest):
 
 
 @app.get("/agents/{agent_id}/jobs")
-async def list_jobs(agent_id: str):
+async def list_jobs(agent_id: str, _user: str = Depends(get_current_user)):
     jobs = await get_jobs(agent_id)
     return {"jobs": jobs}
 
 
 @app.patch("/agents/{agent_id}/jobs/{job_id}")
-async def update_job_endpoint(agent_id: str, job_id: str, req: UpdateJobRequest):
+async def update_job_endpoint(agent_id: str, job_id: str, req: UpdateJobRequest, _user: str = Depends(get_current_user)):
     updates = req.model_dump(exclude_none=True)
     if not updates:
         raise HTTPException(status_code=400, detail="No fields to update")
@@ -242,7 +250,7 @@ async def update_job_endpoint(agent_id: str, job_id: str, req: UpdateJobRequest)
 
 
 @app.delete("/agents/{agent_id}/jobs/{job_id}")
-async def delete_job_endpoint(agent_id: str, job_id: str):
+async def delete_job_endpoint(agent_id: str, job_id: str, _user: str = Depends(get_current_user)):
     success = await delete_job(job_id)
     if not success:
         raise HTTPException(status_code=404, detail="Job not found")

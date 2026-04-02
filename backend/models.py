@@ -12,6 +12,8 @@ class CreateAgentRequest(BaseModel):
     user_id: str
     name: str
     description: str
+    emoji: str = "🤖"
+    tone: str = "balanced"
 
 
 class UpdateAgentRequest(BaseModel):

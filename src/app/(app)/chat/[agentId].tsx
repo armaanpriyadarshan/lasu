@@ -1,9 +1,10 @@
-import { useCallback, useRef, useState } from 'react'
+import React, { useCallback, useEffect, useRef, useState } from 'react'
 import {
   ActivityIndicator,
   FlatList,
   KeyboardAvoidingView,
   Linking,
+  Modal,
   Platform,
   Pressable,
   ScrollView,
@@ -15,6 +16,7 @@ import { useFocusEffect, useLocalSearchParams, useRouter } from 'expo-router'
 import Animated, { FadeIn } from 'react-native-reanimated'
 
 import { ThemedText } from '@/components/themed-text'
+import { SvgIcon } from '@/components/icons'
 import { Colors } from '@/constants/theme'
 import { useAuth } from '@/lib/auth'
 import {
@@ -31,6 +33,61 @@ import {
 const C = Colors.light
 const isWeb = Platform.OS === 'web'
 
+function renderMarkdown(text: string, color: string) {
+  if (!isWeb) {
+    return <ThemedText style={[styles.bubbleText, { color }]}>{text}</ThemedText>
+  }
+  // Simple markdown → HTML
+  let html = text
+    .replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;')
+    // code blocks
+    .replace(/```(\w*)\n([\s\S]*?)```/g, '<pre style="background:#EBE5D5;padding:10px 12px;border-radius:6px;overflow-x:auto;font-family:var(--font-mono);font-size:12px;margin:6px 0;white-space:pre-wrap">$2</pre>')
+    // inline code
+    .replace(/`([^`]+)`/g, '<code style="background:#EBE5D5;padding:1px 5px;border-radius:3px;font-family:var(--font-mono);font-size:12px">$1</code>')
+    // bold
+    .replace(/\*\*(.+?)\*\*/g, '<strong>$1</strong>')
+    // italic
+    .replace(/\*(.+?)\*/g, '<em>$1</em>')
+    // unordered lists
+    .replace(/^[-•] (.+)$/gm, '<li style="margin-left:16px;margin-bottom:2px">$1</li>')
+    // newlines (but not inside pre)
+    .replace(/\n/g, '<br/>')
+  return React.createElement('div', {
+    style: { color, fontSize: 14, lineHeight: '22px', fontFamily: 'var(--font-display)', wordBreak: 'break-word' },
+    dangerouslySetInnerHTML: { __html: html },
+  })
+}
+
+function TypingDots() {
+  const [dots, setDots] = useState('.')
+  useEffect(() => {
+    const interval = setInterval(() => {
+      setDots((d) => (d.length >= 3 ? '.' : d + '.'))
+    }, 400)
+    return () => clearInterval(interval)
+  }, [])
+  return (
+    <View style={[typingStyles.bubble]}>
+      <ThemedText style={[typingStyles.dots, { color: C.pencil }]}>{dots}</ThemedText>
+    </View>
+  )
+}
+
+const typingStyles = StyleSheet.create({
+  bubble: {
+    alignSelf: 'flex-start',
+    paddingVertical: 10,
+    paddingHorizontal: 14,
+    marginBottom: 8,
+  },
+  dots: {
+    fontSize: 18,
+    fontWeight: '400',
+    letterSpacing: 2,
+    ...(isWeb && { fontFamily: 'var(--font-mono)' } as any),
+  },
+})
+
 export default function ChatScreen() {
   const { agentId } = useLocalSearchParams<{ agentId: string }>()
   const { userId } = useAuth()
@@ -43,12 +100,11 @@ export default function ChatScreen() {
   const [input, setInput] = useState('')
   const [sending, setSending] = useState(false)
   const [memories, setMemories] = useState<AgentMemory[]>([])
-  const [showMemory, setShowMemory] = useState(false)
   const [permRequests, setPermRequests] = useState<PermissionRequest[]>([])
   const [permissions, setPermissions] = useState<AgentPermission[]>([])
-  const [showPermissions, setShowPermissions] = useState(false)
   const [heartbeat, setHeartbeat] = useState<AgentJob | null>(null)
   const [showGoogleConnect, setShowGoogleConnect] = useState(false)
+  const [panel, setPanel] = useState<'none' | 'memory' | 'permissions'>('none')
 
   useFocusEffect(
     useCallback(() => {
@@ -110,13 +166,8 @@ export default function ChatScreen() {
     if (!agentId) return
     try {
       if (heartbeat) {
-        if (heartbeat.enabled) {
-          const updated = await updateJob(agentId, heartbeat.id, { enabled: false })
-          setHeartbeat(updated)
-        } else {
-          const updated = await updateJob(agentId, heartbeat.id, { enabled: true })
-          setHeartbeat(updated)
-        }
+        const updated = await updateJob(agentId, heartbeat.id, { enabled: !heartbeat.enabled })
+        setHeartbeat(updated)
       } else {
         const job = await createJob(agentId, 30)
         setHeartbeat(job)
@@ -144,15 +195,13 @@ export default function ChatScreen() {
 
     try {
       const { reply, tool_calls } = await chatWithAgent(agentId, userId, text)
-      // Show tool activity before the reply
       if (tool_calls && tool_calls.length > 0) {
         const toolSummary = tool_calls.map((tc: { tool: string; args: Record<string, unknown>; result: string }) => {
           if (tc.result === 'permission_denied') return `[${tc.tool}] Permission needed`
           if (tc.result.includes('not connected')) return `[${tc.tool}] Google account needed`
           return `[${tc.tool}] Done`
         }).join('\n')
-        const toolMsg: AgentMessage = { role: 'assistant', content: `Tools used:\n${toolSummary}`, created_at: new Date().toISOString() }
-        setMessages((prev) => [...prev, toolMsg])
+        setMessages((prev) => [...prev, { role: 'assistant', content: `Tools used:\n${toolSummary}`, created_at: new Date().toISOString() }])
         // Show Google connect if any tool needs it
         if (tool_calls.some((tc: { result: string }) => tc.result.includes('not connected') || tc.result.includes('Google account'))) {
           setShowGoogleConnect(true)
@@ -168,12 +217,13 @@ export default function ChatScreen() {
       getAgentMemories(agentId).then(({ memories }) => setMemories(memories)).catch(() => {})
       getPendingRequests(agentId).then(({ requests }) => setPermRequests(requests)).catch(() => {})
     } catch {
-      const errMsg: AgentMessage = { role: 'assistant', content: 'Something went wrong. Try again.', created_at: new Date().toISOString() }
-      setMessages((prev) => [...prev, errMsg])
+      setMessages((prev) => [...prev, { role: 'assistant', content: 'Something went wrong. Try again.', created_at: new Date().toISOString() }])
     } finally {
       setSending(false)
     }
   }
+
+  const permCount = permissions.filter((p) => !p.revoked_at).length
 
   if (loading) {
     return (
@@ -189,97 +239,94 @@ export default function ChatScreen() {
       behavior={Platform.OS === 'ios' ? 'padding' : undefined}
       keyboardVerticalOffset={90}
     >
-      {/* Header */}
-      <Animated.View entering={FadeIn.duration(300)} style={styles.chatHeader}>
-        <Pressable onPress={() => router.back()} style={styles.backBtn}>
-          <ThemedText style={{ color: C.pencil, fontSize: 14 }}>{'< Back'}</ThemedText>
+
+      {/* Memory modal */}
+      <Modal
+        visible={panel === 'memory'}
+        transparent
+        animationType="fade"
+        onRequestClose={() => setPanel('none')}
+      >
+        <Pressable style={styles.modalOverlay} onPress={() => setPanel('none')}>
+          <Pressable style={styles.modalContent} onPress={(e) => e.stopPropagation()}>
+            <View style={styles.modalHeader}>
+              <ThemedText serif style={[styles.modalTitle, { color: C.ink }]}>
+                Memory
+              </ThemedText>
+              <Pressable onPress={() => setPanel('none')} style={styles.modalClose}>
+                <ThemedText style={{ color: C.pencil, fontSize: 18 }}>×</ThemedText>
+              </Pressable>
+            </View>
+            <ScrollView style={styles.modalScroll}>
+              {memories.length === 0 ? (
+                <ThemedText style={[styles.panelEmpty, { color: C.pencil }]}>
+                  No memories yet. Chat more and {agent?.name} will learn about you.
+                </ThemedText>
+              ) : (
+                memories.map((mem) => (
+                  <View key={mem.id} style={styles.panelItem}>
+                    <View style={styles.panelItemContent}>
+                      <ThemedText style={[styles.panelKey, { color: C.graphite }]}>
+                        {mem.key.replace(/_/g, ' ')}
+                      </ThemedText>
+                      <ThemedText style={[styles.panelValue, { color: C.fadedInk }]}>
+                        {mem.value}
+                      </ThemedText>
+                    </View>
+                    <Pressable onPress={() => handleDeleteMemory(mem.id)} style={styles.panelAction}>
+                      <ThemedText style={{ color: C.pencil, fontSize: 12 }}>×</ThemedText>
+                    </Pressable>
+                  </View>
+                ))
+              )}
+            </ScrollView>
+          </Pressable>
         </Pressable>
-        <View style={styles.headerCenter}>
-          <View style={styles.headerAvatar}>
-            <ThemedText style={[styles.headerInitial, { color: C.white }]}>
-              {agent?.name.charAt(0).toUpperCase()}
-            </ThemedText>
-          </View>
-          <ThemedText style={[styles.headerName, { color: C.ink }]}>
-            {agent?.name}
-          </ThemedText>
-        </View>
-        <View style={styles.headerRight}>
-          <Pressable onPress={handleToggleHeartbeat}>
-            <ThemedText style={{ color: heartbeat?.enabled ? C.connectedText : C.pencil, fontSize: 11 }}>
-              {heartbeat?.enabled ? 'Live' : 'Idle'}
-            </ThemedText>
-          </Pressable>
-          <Pressable onPress={() => { setShowPermissions(!showPermissions); setShowMemory(false) }}>
-            <ThemedText style={{ color: showPermissions ? C.tide : C.pencil, fontSize: 11 }}>
-              {permissions.filter((p) => p.grant_type === 'permanent').length > 0 ? `Perms (${permissions.filter((p) => p.grant_type === 'permanent').length})` : 'Perms'}
-            </ThemedText>
-          </Pressable>
-          <Pressable onPress={() => { setShowMemory(!showMemory); setShowPermissions(false) }}>
-            <ThemedText style={{ color: showMemory ? C.tide : C.pencil, fontSize: 11 }}>
-              {memories.length > 0 ? `Memory (${memories.length})` : 'Memory'}
-            </ThemedText>
-          </Pressable>
-        </View>
-      </Animated.View>
+      </Modal>
 
-      {showMemory && (
-        <ScrollView style={styles.memoryPanel}>
-          <ThemedText serif style={[styles.memoryTitle, { color: C.ink }]}>
-            What {agent?.name} remembers
-          </ThemedText>
-          {memories.length === 0 ? (
-            <ThemedText style={[styles.memoryEmpty, { color: C.pencil }]}>
-              No memories yet. Chat more and {agent?.name} will learn about you.
-            </ThemedText>
-          ) : (
-            memories.map((mem) => (
-              <View key={mem.id} style={styles.memoryItem}>
-                <View style={styles.memoryContent}>
-                  <ThemedText style={[styles.memoryKey, { color: C.graphite }]}>
-                    {mem.key.replace(/_/g, ' ')}
-                  </ThemedText>
-                  <ThemedText style={[styles.memoryValue, { color: C.fadedInk }]}>
-                    {mem.value}
-                  </ThemedText>
-                </View>
-                <Pressable onPress={() => handleDeleteMemory(mem.id)} style={styles.memoryDelete}>
-                  <ThemedText style={{ color: C.pencil, fontSize: 12 }}>x</ThemedText>
-                </Pressable>
-              </View>
-            ))
-          )}
-        </ScrollView>
-      )}
-
-      {showPermissions && (
-        <ScrollView style={styles.memoryPanel}>
-          <ThemedText serif style={[styles.memoryTitle, { color: C.ink }]}>
-            Permissions
-          </ThemedText>
-          {permissions.filter((p) => p.grant_type === 'permanent').length === 0 ? (
-            <ThemedText style={[styles.memoryEmpty, { color: C.pencil }]}>
-              No permissions granted yet. When {agent?.name} needs access to something, it will ask.
-            </ThemedText>
-          ) : (
-            permissions.filter((p) => p.grant_type === 'permanent').map((perm) => (
-              <View key={perm.id} style={styles.memoryItem}>
-                <View style={styles.memoryContent}>
-                  <ThemedText style={[styles.memoryKey, { color: C.graphite }]}>
-                    {perm.permission}
-                  </ThemedText>
-                  <ThemedText style={[styles.memoryValue, { color: C.fadedInk }]}>
-                    Always allowed
-                  </ThemedText>
-                </View>
-                <Pressable onPress={() => handleRevokePermission(perm.id)} style={styles.memoryDelete}>
-                  <ThemedText style={{ color: C.waxSeal, fontSize: 11 }}>Revoke</ThemedText>
-                </Pressable>
-              </View>
-            ))
-          )}
-        </ScrollView>
-      )}
+      {/* Permissions modal */}
+      <Modal
+        visible={panel === 'permissions'}
+        transparent
+        animationType="fade"
+        onRequestClose={() => setPanel('none')}
+      >
+        <Pressable style={styles.modalOverlay} onPress={() => setPanel('none')}>
+          <Pressable style={styles.modalContent} onPress={(e) => e.stopPropagation()}>
+            <View style={styles.modalHeader}>
+              <ThemedText serif style={[styles.modalTitle, { color: C.ink }]}>
+                Permissions
+              </ThemedText>
+              <Pressable onPress={() => setPanel('none')} style={styles.modalClose}>
+                <ThemedText style={{ color: C.pencil, fontSize: 18 }}>×</ThemedText>
+              </Pressable>
+            </View>
+            <ScrollView style={styles.modalScroll}>
+              {permCount === 0 ? (
+                <ThemedText style={[styles.panelEmpty, { color: C.pencil }]}>
+                  No permissions granted yet.
+                </ThemedText>
+              ) : (
+                permissions.filter((p) => !p.revoked_at).map((perm) => (
+                  <View key={perm.id} style={styles.panelItem}>
+                    <View style={styles.panelItemContent}>
+                      <ThemedText style={[styles.panelKey, { color: C.graphite }]}>
+                        {perm.permission}
+                      </ThemedText>
+                      <ThemedText style={[styles.panelValue, { color: C.fadedInk }]}>
+                        {perm.grant_type === 'permanent' ? 'Always allowed' : 'One-time'}
+                      </ThemedText>
+                    </View>
+                    <Pressable onPress={() => handleRevokePermission(perm.id)} style={styles.panelAction}>
+                      <ThemedText style={{ color: C.waxSeal, fontSize: 11 }}>Revoke</ThemedText>
+                    </Pressable>
+                  </View>
+                ))
+              )}
+            </ScrollView>
+          </Pressable>
+        </Pressable>
+      </Modal>
 
       {/* Messages */}
       <FlatList
@@ -288,58 +335,95 @@ export default function ChatScreen() {
         keyExtractor={(_, i) => String(i)}
         contentContainerStyle={styles.messageList}
         onContentSizeChange={() => flatListRef.current?.scrollToEnd({ animated: true })}
-        ListEmptyComponent={
-          <View style={styles.emptyChat}>
-            <ThemedText serif style={[styles.emptyChatTitle, { color: C.fadedInk }]}>
-              Start a conversation
+        ListHeaderComponent={
+          <Animated.View entering={FadeIn.duration(400)} style={styles.profileCenter}>
+            <View style={styles.avatar}>
+              {agent?.emoji?.startsWith('http') ? (
+                isWeb ? React.createElement('img', {
+                  src: agent.emoji,
+                  style: { width: 52, height: 52, borderRadius: 16, objectFit: 'cover' },
+                }) : null
+              ) : (
+                <ThemedText style={styles.avatarEmoji}>
+                  {agent?.emoji || agent?.name.charAt(0).toUpperCase()}
+                </ThemedText>
+              )}
+            </View>
+            <View style={styles.nameRow}>
+              <ThemedText serif style={[styles.agentName, { color: C.ink }]}>
+                {agent?.name}
+              </ThemedText>
+              <Pressable onPress={handleToggleHeartbeat} style={styles.statusDotBtn}>
+                <View style={[styles.statusDot, { backgroundColor: heartbeat?.enabled ? C.connectedText : C.pencil }]} />
+              </Pressable>
+            </View>
+            <ThemedText style={[styles.agentDesc, { color: C.pencil }]} numberOfLines={2}>
+              {agent?.description}
             </ThemedText>
-            <ThemedText style={[styles.emptyChatText, { color: C.pencil }]}>
-              Say hello to {agent?.name}.
-            </ThemedText>
-          </View>
+
+            <View style={styles.chips}>
+              <Pressable
+                onPress={() => setPanel(panel === 'memory' ? 'none' : 'memory')}
+                dataSet={{ hover: 'vellum' }}
+                style={[styles.chip, panel === 'memory' && styles.chipActive]}
+              >
+                <SvgIcon name="nodes" size={12} color={panel === 'memory' ? C.tide : C.pencil} />
+                <ThemedText style={[styles.chipText, { color: panel === 'memory' ? C.tide : C.pencil }]}>
+                  {memories.length > 0 ? `MEMORY (${memories.length})` : 'MEMORY'}
+                </ThemedText>
+              </Pressable>
+
+              <Pressable
+                onPress={() => setPanel(panel === 'permissions' ? 'none' : 'permissions')}
+                dataSet={{ hover: 'vellum' }}
+                style={[styles.chip, panel === 'permissions' && styles.chipActive]}
+              >
+                <SvgIcon name="shield" size={12} color={panel === 'permissions' ? C.tide : C.pencil} />
+                <ThemedText style={[styles.chipText, { color: panel === 'permissions' ? C.tide : C.pencil }]}>
+                  {permCount > 0 ? `PERMS (${permCount})` : 'PERMS'}
+                </ThemedText>
+              </Pressable>
+            </View>
+
+            {messages.length === 0 && (
+              <View style={styles.emptyChat}>
+                <ThemedText style={[styles.emptyChatText, { color: C.pencil }]}>
+                  Say hello to {agent?.name}.
+                </ThemedText>
+              </View>
+            )}
+          </Animated.View>
         }
         renderItem={({ item }) => (
-          <View
-            style={[
-              styles.bubble,
-              item.role === 'user' ? styles.bubbleUser : styles.bubbleAgent,
-            ]}
-          >
-            <ThemedText
-              style={[
-                styles.bubbleText,
-                { color: item.role === 'user' ? C.white : C.fadedInk },
-              ]}
-            >
-              {item.content}
-            </ThemedText>
+          <View style={[styles.bubble, item.role === 'user' ? styles.bubbleUser : styles.bubbleAgent]}>
+            {item.role === 'user' ? (
+              <ThemedText style={[styles.bubbleText, { color: C.white }]}>
+                {item.content}
+              </ThemedText>
+            ) : (
+              renderMarkdown(item.content, C.fadedInk)
+            )}
           </View>
         )}
+        ListFooterComponent={sending ? <TypingDots /> : null}
       />
 
+      {/* Permission requests */}
       {permRequests.length > 0 && (
-        <View style={styles.permRequestBar}>
+        <View style={styles.permBar}>
           {permRequests.map((req) => (
-            <View key={req.id} style={styles.permRequestCard}>
-              <ThemedText style={[styles.permRequestText, { color: C.fadedInk }]}>
+            <View key={req.id} style={styles.permCard}>
+              <ThemedText style={[styles.permText, { color: C.fadedInk }]}>
                 {agent?.name} needs {req.permission} access
               </ThemedText>
               {req.reason ? (
-                <ThemedText style={[styles.permRequestReason, { color: C.pencil }]}>
-                  {req.reason}
-                </ThemedText>
+                <ThemedText style={[styles.permReason, { color: C.pencil }]}>{req.reason}</ThemedText>
               ) : null}
-              <View style={styles.permRequestActions}>
-                <Pressable
-                  onPress={() => handleGrantPermission(req.id, 'one_time')}
-                  style={[styles.permBtn, styles.permBtnOutline]}
-                >
+              <View style={styles.permActions}>
+                <Pressable onPress={() => handleGrantPermission(req.id, 'one_time')} style={[styles.permBtn, styles.permBtnOutline]}>
                   <ThemedText style={[styles.permBtnText, { color: C.ink }]}>Allow once</ThemedText>
                 </Pressable>
-                <Pressable
-                  onPress={() => handleGrantPermission(req.id, 'permanent')}
-                  style={[styles.permBtn, styles.permBtnFilled]}
-                >
+                <Pressable onPress={() => handleGrantPermission(req.id, 'permanent')} style={[styles.permBtn, styles.permBtnFilled]}>
                   <ThemedText style={[styles.permBtnText, { color: C.white }]}>Always allow</ThemedText>
                 </Pressable>
                 <Pressable onPress={() => handleDenyPermission(req.id)}>
@@ -377,79 +461,193 @@ export default function ChatScreen() {
 
       {/* Input */}
       <View style={styles.inputBar}>
-        <TextInput
-          placeholder={`Message ${agent?.name ?? 'agent'}...`}
-          placeholderTextColor={C.pencil}
-          value={input}
-          onChangeText={setInput}
-          onSubmitEditing={handleSend}
-          returnKeyType="send"
-          editable={!sending}
-          style={[styles.textInput, { color: C.ink, borderColor: C.ruledLine }]}
-        />
-        <Pressable
-          onPress={handleSend}
-          disabled={sending || !input.trim()}
-          style={({ pressed }) => [
-            styles.sendBtn,
-            (sending || !input.trim()) && { opacity: 0.4 },
-            pressed && { opacity: 0.7 },
-          ]}
-        >
-          {sending ? (
-            <ActivityIndicator color={C.white} size="small" />
-          ) : (
-            <ThemedText style={[styles.sendBtnText, { color: C.white }]}>Send</ThemedText>
-          )}
-        </Pressable>
+        <View style={styles.inputRow}>
+          <TextInput
+            placeholder={`Message ${agent?.name ?? 'agent'}...`}
+            placeholderTextColor={C.pencil}
+            value={input}
+            onChangeText={setInput}
+            onSubmitEditing={handleSend}
+            returnKeyType="send"
+            editable={!sending}
+            style={[styles.textInput, { color: C.ink }]}
+          />
+          <Pressable
+            onPress={handleSend}
+            disabled={sending || !input.trim()}
+            style={({ pressed }) => [
+              styles.sendBtn,
+              (sending || !input.trim()) && { opacity: 0.3 },
+              pressed && { opacity: 0.7 },
+            ]}
+          >
+            {sending ? (
+              <ActivityIndicator color={C.white} size="small" />
+            ) : (
+              <ThemedText style={[styles.sendBtnText, { color: C.white }]}>↑</ThemedText>
+            )}
+          </Pressable>
+        </View>
       </View>
     </KeyboardAvoidingView>
   )
 }
 
 const styles = StyleSheet.create({
-  container: { flex: 1, backgroundColor: C.parchment },
+  container: { flex: 1, backgroundColor: C.parchment, maxWidth: 720, alignSelf: 'center', width: '100%' },
   center: { flex: 1, justifyContent: 'center', alignItems: 'center' },
 
-  chatHeader: {
+  // ── Profile (in list header) ──
+  profileCenter: {
+    alignItems: 'center',
+    gap: 6,
+    paddingTop: 48,
+    paddingBottom: 32,
+  },
+  nameRow: {
+    position: 'relative',
     flexDirection: 'row',
     alignItems: 'center',
-    justifyContent: 'space-between',
-    paddingVertical: 12,
-    paddingHorizontal: 16,
-    backgroundColor: C.agedPaper,
-    borderBottomWidth: 0.5,
-    borderBottomColor: C.ruledLine,
   },
-  backBtn: { width: 60 },
-  headerCenter: { flexDirection: 'row', alignItems: 'center', gap: 10 },
-  headerAvatar: {
-    width: 32,
-    height: 32,
+  statusDotBtn: {
+    position: 'absolute',
+    right: '100%',
+    marginRight: 8,
+    top: 0,
+    bottom: 0,
+    justifyContent: 'center',
+    padding: 4,
+    ...(isWeb && { cursor: 'pointer' } as any),
+  },
+  statusDot: {
+    width: 7,
+    height: 7,
+    borderRadius: 4,
+  },
+  avatar: {
+    width: 52,
+    height: 52,
     borderRadius: 16,
-    backgroundColor: C.tide,
+    backgroundColor: C.agedPaper,
     alignItems: 'center',
     justifyContent: 'center',
+    marginBottom: 4,
   },
-  headerInitial: { fontSize: 14, fontWeight: '600' },
-  headerName: {
-    fontSize: 16,
-    fontWeight: '500',
-    ...(isWeb && { fontFamily: 'var(--font-display)' } as any),
+  avatarEmoji: {
+    fontSize: 28,
   },
-
-  messageList: { padding: 16, paddingBottom: 8, flexGrow: 1, justifyContent: 'flex-end' },
-  emptyChat: { alignItems: 'center', marginTop: 60, gap: 8 },
-  emptyChatTitle: {
-    fontSize: 20,
+  agentName: {
+    fontSize: 18,
     fontWeight: '400',
     ...(isWeb && { fontFamily: 'var(--font-serif)' } as any),
   },
+  agentDesc: {
+    fontSize: 12,
+    maxWidth: 300,
+    textAlign: 'center',
+    ...(isWeb && { fontFamily: 'var(--font-display)' } as any),
+  },
+  chips: {
+    flexDirection: 'row',
+    gap: 4,
+    marginTop: 0,
+  },
+  chip: {
+    alignItems: 'center',
+    gap: 12,
+    paddingVertical: 4,
+    paddingHorizontal: 6,
+    borderRadius: 6,
+    ...(isWeb && { cursor: 'pointer', transition: 'background-color 150ms ease' } as any),
+  },
+  chipActive: {
+    backgroundColor: C.agedPaper,
+  },
+  chipText: {
+    fontSize: 9,
+    fontWeight: '500',
+    letterSpacing: 0.5,
+    lineHeight: 12,
+    ...(isWeb && { fontFamily: 'var(--font-mono)' } as any),
+  },
+
+  // ── Modals ──
+  modalOverlay: {
+    flex: 1,
+    backgroundColor: 'rgba(26, 26, 24, 0.4)',
+    justifyContent: 'center',
+    alignItems: 'center',
+    padding: 24,
+  },
+  modalContent: {
+    backgroundColor: C.parchment,
+    borderRadius: 12,
+    width: '100%',
+    maxWidth: 480,
+    maxHeight: '70%',
+    overflow: 'hidden',
+  },
+  modalHeader: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    alignItems: 'center',
+    paddingVertical: 16,
+    paddingHorizontal: 20,
+  },
+  modalTitle: {
+    fontSize: 18,
+    fontWeight: '400',
+    ...(isWeb && { fontFamily: 'var(--font-serif)' } as any),
+  },
+  modalClose: {
+    width: 28,
+    height: 28,
+    borderRadius: 6,
+    alignItems: 'center',
+    justifyContent: 'center',
+    ...(isWeb && { cursor: 'pointer' } as any),
+  },
+  modalScroll: {
+    paddingHorizontal: 20,
+    paddingBottom: 20,
+  },
+  panelEmpty: {
+    fontSize: 13,
+    textAlign: 'center',
+    paddingVertical: 12,
+    ...(isWeb && { fontFamily: 'var(--font-display)' } as any),
+  },
+  panelItem: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'space-between',
+    paddingVertical: 8,
+    borderBottomWidth: 0.5,
+    borderBottomColor: C.ruledLine,
+  },
+  panelItemContent: { flex: 1, gap: 2 },
+  panelKey: {
+    fontSize: 10,
+    fontWeight: '500',
+    textTransform: 'uppercase',
+    ...(isWeb && { fontFamily: 'var(--font-mono)' } as any),
+  },
+  panelValue: {
+    fontSize: 13,
+    ...(isWeb && { fontFamily: 'var(--font-display)' } as any),
+  },
+  panelAction: {
+    padding: 8,
+    ...(isWeb && { cursor: 'pointer' } as any),
+  },
+
+  // ── Messages ──
+  messageList: { padding: 16, paddingBottom: 8, flexGrow: 1 },
+  emptyChat: { alignItems: 'center', marginTop: 16, gap: 8 },
   emptyChatText: {
     fontSize: 13,
     ...(isWeb && { fontFamily: 'var(--font-display)' } as any),
   },
-
   bubble: {
     maxWidth: '80%',
     paddingVertical: 10,
@@ -464,10 +662,8 @@ const styles = StyleSheet.create({
   },
   bubbleAgent: {
     alignSelf: 'flex-start',
-    backgroundColor: C.agedPaper,
-    borderWidth: 0.5,
-    borderColor: C.ruledLine,
-    borderBottomLeftRadius: 4,
+    backgroundColor: 'transparent',
+    paddingHorizontal: 2,
   },
   bubbleText: {
     fontSize: 14,
@@ -475,110 +671,29 @@ const styles = StyleSheet.create({
     ...(isWeb && { fontFamily: 'var(--font-display)' } as any),
   },
 
-  inputBar: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: 10,
-    padding: 12,
-    paddingBottom: Platform.OS === 'ios' ? 28 : 12,
-    backgroundColor: C.agedPaper,
-    borderTopWidth: 0.5,
-    borderTopColor: C.ruledLine,
-  },
-  textInput: {
-    flex: 1,
-    backgroundColor: C.parchment,
-    borderWidth: 0.5,
-    borderRadius: 20,
-    paddingVertical: 10,
-    paddingHorizontal: 16,
-    fontSize: 14,
-    ...(isWeb && { fontFamily: 'var(--font-display)', outlineStyle: 'none' } as any),
-  },
-  sendBtn: {
-    backgroundColor: C.ink,
-    paddingVertical: 10,
-    paddingHorizontal: 18,
-    borderRadius: 20,
-    minWidth: 60,
-    alignItems: 'center',
-    ...(isWeb && { cursor: 'pointer' } as any),
-  },
-  sendBtnText: { fontSize: 13, fontWeight: '500' },
-
-  memoryPanel: {
-    backgroundColor: C.agedPaper,
-    borderBottomWidth: 0.5,
-    borderBottomColor: C.ruledLine,
-    padding: 16,
-    maxHeight: 400,
-    minHeight: 80,
-  },
-  memoryTitle: {
-    fontSize: 16,
-    fontWeight: '400',
-    marginBottom: 12,
-    ...(isWeb && { fontFamily: 'var(--font-serif)' } as any),
-  },
-  memoryEmpty: {
-    fontSize: 13,
-    ...(isWeb && { fontFamily: 'var(--font-display)' } as any),
-  },
-  memoryItem: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    justifyContent: 'space-between',
-    paddingVertical: 8,
-    borderBottomWidth: 0.5,
-    borderBottomColor: C.ruledLine,
-  },
-  memoryContent: { flex: 1, gap: 2 },
-  memoryKey: {
-    fontSize: 11,
-    fontWeight: '500',
-    textTransform: 'uppercase',
-    ...(isWeb && { fontFamily: 'var(--font-mono)' } as any),
-  },
-  memoryValue: {
-    fontSize: 13,
-    ...(isWeb && { fontFamily: 'var(--font-display)' } as any),
-  },
-  memoryDelete: {
-    padding: 8,
-    ...(isWeb && { cursor: 'pointer' } as any),
-  },
-  headerRight: {
-    flexDirection: 'row',
-    gap: 12,
-    alignItems: 'center',
-    width: 120,
-    justifyContent: 'flex-end',
-  },
-  permRequestBar: {
+  // ── Permission requests ──
+  permBar: {
     padding: 12,
     gap: 8,
-    backgroundColor: C.agedPaper,
-    borderTopWidth: 0.5,
-    borderTopColor: C.ruledLine,
   },
-  permRequestCard: {
-    backgroundColor: C.parchment,
+  permCard: {
+    backgroundColor: C.agedPaper,
     borderWidth: 0.5,
     borderColor: C.ruledLine,
     borderRadius: 10,
     padding: 14,
     gap: 8,
   },
-  permRequestText: {
+  permText: {
     fontSize: 13,
     fontWeight: '500',
     ...(isWeb && { fontFamily: 'var(--font-display)' } as any),
   },
-  permRequestReason: {
+  permReason: {
     fontSize: 12,
     ...(isWeb && { fontFamily: 'var(--font-display)' } as any),
   },
-  permRequestActions: {
+  permActions: {
     flexDirection: 'row',
     alignItems: 'center',
     gap: 10,
@@ -603,4 +718,35 @@ const styles = StyleSheet.create({
     fontWeight: '500',
     ...(isWeb && { fontFamily: 'var(--font-display)' } as any),
   },
+
+  // ── Input ──
+  inputBar: {
+    padding: 12,
+    paddingBottom: Platform.OS === 'ios' ? 28 : 12,
+  },
+  inputRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    backgroundColor: C.agedPaper,
+    borderRadius: 12,
+    paddingLeft: 16,
+    paddingRight: 4,
+    paddingVertical: 4,
+  },
+  textInput: {
+    flex: 1,
+    fontSize: 14,
+    paddingVertical: 8,
+    ...(isWeb && { fontFamily: 'var(--font-display)', outlineStyle: 'none' } as any),
+  },
+  sendBtn: {
+    backgroundColor: C.ink,
+    width: 32,
+    height: 32,
+    borderRadius: 16,
+    alignItems: 'center',
+    justifyContent: 'center',
+    ...(isWeb && { cursor: 'pointer' } as any),
+  },
+  sendBtnText: { fontSize: 16, fontWeight: '500' },
 })
