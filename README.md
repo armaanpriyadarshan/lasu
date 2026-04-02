@@ -1,56 +1,147 @@
-# Welcome to your Expo app 👋
+# sudo
 
-This is an [Expo](https://expo.dev) project created with [`create-expo-app`](https://www.npmjs.com/package/create-expo-app).
+a 24/7 autonomous personal intelligence agent. text it over SMS or Telegram, and it responds with context about your life. it remembers everything you tell it.
 
-## Get started
+## stack
 
-1. Install dependencies
+| layer | choice |
+|---|---|
+| backend | FastAPI (Python 3.11+) |
+| database | Supabase (Postgres) |
+| SMS | Twilio Messaging + Verify |
+| telegram | Bot API + Login Widget (OAuth) |
+| LLM | OpenAI API |
+| app | Expo (React Native) — web, iOS, Android |
 
-   ```bash
-   npm install
-   ```
+## setup
 
-2. Start the app
-
-   ```bash
-   npx expo start
-   ```
-
-In the output, you'll find options to open the app in a
-
-- [development build](https://docs.expo.dev/develop/development-builds/introduction/)
-- [Android emulator](https://docs.expo.dev/workflow/android-studio-emulator/)
-- [iOS simulator](https://docs.expo.dev/workflow/ios-simulator/)
-- [Expo Go](https://expo.dev/go), a limited sandbox for trying out app development with Expo
-
-You can start developing by editing the files inside the **app** directory. This project uses [file-based routing](https://docs.expo.dev/router/introduction).
-
-## Get a fresh project
-
-When you're ready, run:
+### 1. clone and install
 
 ```bash
-npm run reset-project
+git clone <repo-url> && cd sudo
 ```
 
-This command will move the starter code to the **app-example** directory and create a blank **app** directory where you can start developing.
+backend:
 
-### Other setup steps
+```bash
+cd backend
+python3 -m venv venv
+source venv/bin/activate
+pip install -r requirements.txt
+```
 
-- To set up ESLint for linting, run `npx expo lint`, or follow our guide on ["Using ESLint and Prettier"](https://docs.expo.dev/guides/using-eslint/)
-- If you'd like to set up unit testing, follow our guide on ["Unit Testing with Jest"](https://docs.expo.dev/develop/unit-testing/)
-- Learn more about the TypeScript setup in this template in our guide on ["Using TypeScript"](https://docs.expo.dev/guides/typescript/)
+app:
 
-## Learn more
+```bash
+npm install
+```
 
-To learn more about developing your project with Expo, look at the following resources:
+### 2. supabase
 
-- [Expo documentation](https://docs.expo.dev/): Learn fundamentals, or go into advanced topics with our [guides](https://docs.expo.dev/guides).
-- [Learn Expo tutorial](https://docs.expo.dev/tutorial/introduction/): Follow a step-by-step tutorial where you'll create a project that runs on Android, iOS, and the web.
+create a project. create three tables:
 
-## Join the community
+```sql
+create table users (
+  id uuid primary key default gen_random_uuid(),
+  phone_number text unique,
+  verified boolean default false,
+  created_at timestamptz default now(),
+  telegram_chat_id bigint unique
+);
 
-Join our community of developers creating universal apps.
+create table messages (
+  id uuid primary key default gen_random_uuid(),
+  user_id uuid references users(id),
+  role text not null,
+  content text not null,
+  created_at timestamptz default now()
+);
 
-- [Expo on GitHub](https://github.com/expo/expo): View our open source platform and contribute.
-- [Discord community](https://chat.expo.dev): Chat with Expo users and ask questions.
+create table memory (
+  id uuid primary key default gen_random_uuid(),
+  user_id uuid references users(id),
+  key text not null,
+  value text not null,
+  updated_at timestamptz default now(),
+  unique(user_id, key)
+);
+```
+
+enable Realtime on the `messages` table (Database > Replication).
+
+### 3. twilio
+
+- create a Twilio account and get a phone number
+- create a Verify Service (for phone code verification)
+
+### 4. telegram bot
+
+- message @BotFather on Telegram, run `/newbot`
+- name it whatever you want (username must end in `bot`)
+- save the bot token
+
+### 5. environment variables
+
+backend — create `backend/.env`:
+
+```
+SUPABASE_URL=https://your-project.supabase.co
+SUPABASE_SERVICE_ROLE_KEY=your-service-role-key
+OPENAI_API_KEY=sk-...
+TWILIO_ACCOUNT_SID=AC...
+TWILIO_AUTH_TOKEN=...
+TWILIO_PHONE_NUMBER=+1...
+TWILIO_VERIFY_SERVICE_SID=VA...
+TELEGRAM_BOT_TOKEN=...
+TELEGRAM_BOT_USERNAME=your_bot_username
+APP_URL=http://localhost:8000
+```
+
+`APP_URL` is your public backend URL — ngrok in dev, Railway in prod.
+
+the app uses defaults in `src/lib/api.ts`. update the API URL there for production.
+
+## running
+
+### backend
+
+```bash
+cd backend
+source venv/bin/activate
+uvicorn main:app --reload --port 8000
+```
+
+### app
+
+```bash
+npx expo start
+```
+
+press `w` for web, `i` for iOS simulator, `a` for Android.
+
+### local dev with webhooks
+
+you need a public URL for Twilio and Telegram webhooks. use ngrok:
+
+```bash
+ngrok http 8000
+```
+
+then:
+
+1. update `APP_URL` in `backend/.env` to the ngrok https URL
+2. set the Twilio SMS webhook to `https://<ngrok-url>/sms`
+3. set the Telegram webhook:
+
+```bash
+curl -X POST "https://api.telegram.org/bot<TOKEN>/setWebhook" \
+  -H "Content-Type: application/json" \
+  -d '{"url": "https://<ngrok-url>/telegram"}'
+```
+
+## deployment
+
+- **backend**: Railway. set env vars in the dashboard. uses `Procfile`: `web: uvicorn main:app --host 0.0.0.0 --port $PORT`
+- **twilio webhook**: point to `https://<railway-url>/sms`
+- **telegram webhook**: point to `https://<railway-url>/telegram`
+- **app**: Expo Go for dev, EAS for production builds

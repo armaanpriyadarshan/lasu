@@ -1,4 +1,4 @@
-# Lasu — Design System
+# sudo — Design System
 
 ## Aesthetic
 
@@ -134,14 +134,14 @@ Pen-and-ink line art. The defining visual element. Present on the landing page a
 ### Navigation (Landing)
 
 - Full-width, transparent over parchment. Padding: 24px 40px.
-- Left: "LASU" in Ink, Inter, 13px, uppercase, letter-spacing 0.15em.
+- Left: "SUDO" in Ink, Inter, 13px, uppercase, letter-spacing 0.15em.
 - Right: "Log in" in Pencil, Inter, 13px. Underline on hover.
 - No background, no border, no sticky. Scrolls with the page.
 
 ### Sidebar (App)
 
 - Background: Aged Paper (`#EBE5D5`). Not dark. This is slightly deeper parchment.
-- Logo: "Lasu" in Ink, Instrument Serif, 18px. Below: "your personal AI spirit" in Pencil, Instrument Serif italic, 12px.
+- Logo: "sudo" in Ink, Instrument Serif, 18px. Below: "your personal AI spirit" in Pencil, Instrument Serif italic, 12px.
 - Nav items: Inter, 13px, 500 weight. Color: Graphite. Padding: 8px 12px, 8px radius.
 - Active nav item: Vellum (`#E0DAC8`) bg, Ink text.
 - Hover: Vellum bg.

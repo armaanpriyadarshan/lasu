@@ -10,12 +10,15 @@ import {
 import { SafeAreaView } from 'react-native-safe-area-context'
 import Animated, { FadeIn } from 'react-native-reanimated'
 import { useRouter } from 'expo-router'
+import * as WebBrowser from 'expo-web-browser'
+import * as Linking from 'expo-linking'
 
 import { ThemedText } from '@/components/themed-text'
 import { Colors } from '@/constants/theme'
 import { useAuth } from '@/lib/auth'
-import { sendCode, verifyCode, authTelegram } from '@/lib/api'
+import { sendCode, verifyCode } from '@/lib/api'
 import { formatToE164, formatPhone } from '@/lib/phone'
+import { API_URL } from '@/lib/api'
 
 const C = Colors.light
 const isWeb = Platform.OS === 'web'
@@ -88,15 +91,30 @@ export default function StartPage() {
     setError('')
     setLoading(true)
     try {
-      const result = await authTelegram()
-      await signIn(result.user_id)
-      router.replace('/(app)')
+      const redirectUrl = Linking.createURL('auth/telegram')
+      await WebBrowser.openAuthSessionAsync(
+        `${API_URL}/auth/telegram/login`,
+        redirectUrl,
+      )
     } catch {
       setError('Something went wrong. Try again.')
     } finally {
       setLoading(false)
     }
   }
+
+  // Handle deep link callback from Telegram OAuth
+  useEffect(() => {
+    const handleUrl = async ({ url }: { url: string }) => {
+      const parsed = Linking.parse(url)
+      if (parsed.path === 'auth/telegram' && parsed.queryParams?.user_id) {
+        await signIn(parsed.queryParams.user_id as string)
+        router.replace('/(app)')
+      }
+    }
+    const sub = Linking.addEventListener('url', handleUrl)
+    return () => sub.remove()
+  }, [])
 
   if (authLoading) return <View style={styles.page} />
 
@@ -108,7 +126,7 @@ export default function StartPage() {
           <View style={styles.header}>
             <Animated.View entering={FadeIn.duration(1200).delay(200)}>
               <ThemedText serif style={[styles.title, { color: C.ink }]}>
-                Lasu
+                sudo
               </ThemedText>
             </Animated.View>
             <Animated.View entering={FadeIn.duration(1200).delay(900)}>
@@ -165,6 +183,21 @@ export default function StartPage() {
                   <ThemedText style={styles.error}>{error}</ThemedText>
                 ) : null}
 
+                <ThemedText style={[styles.dividerText, { color: C.pencil }]}>or</ThemedText>
+
+                <Pressable
+                  onPress={handleTelegram}
+                  dataSet={{ hover: 'ghost' }}
+                  style={({ pressed }) => [
+                    styles.telegramBtn,
+                    pressed && styles.telegramBtnPressed,
+                  ]}
+                >
+                  <ThemedText style={[styles.telegramText, { color: C.fadedInk }]}>
+                    Continue with Telegram
+                  </ThemedText>
+                </Pressable>
+
                 <View style={styles.legal}>
                   <ThemedText style={[styles.legalText, { color: C.ruledLine }]}>
                     By continuing, you agree to our{' '}
@@ -189,24 +222,6 @@ export default function StartPage() {
                     </ThemedText>
                   </Pressable>
                 </View>
-
-                <View style={styles.dividerRow}>
-                  <View style={styles.dividerLine} />
-                  <ThemedText style={[styles.dividerText, { color: C.pencil }]}>or</ThemedText>
-                  <View style={styles.dividerLine} />
-                </View>
-
-                <Pressable
-                  onPress={handleTelegram}
-                  style={({ pressed }) => [
-                    styles.telegramBtn,
-                    pressed && styles.telegramBtnPressed,
-                  ]}
-                >
-                  <ThemedText style={[styles.telegramText, { color: C.fadedInk }]}>
-                    Continue with Telegram
-                  </ThemedText>
-                </Pressable>
               </View>
             ) : (
               <View key="code" style={styles.card}>

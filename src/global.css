@@ -94,6 +94,13 @@ input:focus {
 [data-hover="vellum"] {
   transition: background-color 150ms ease;
 }
+[data-hover="ghost"] {
+  transition: border-color 150ms ease, background-color 150ms ease;
+}
+[data-hover="ghost"]:hover {
+  border-color: #C5BFA8 !important;
+  background-color: rgba(224, 218, 200, 0.3) !important;
+}
 
 @media (prefers-reduced-motion: reduce) {
   *, *::before, *::after {

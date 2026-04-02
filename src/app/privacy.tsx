@@ -20,7 +20,7 @@ export default function PrivacyScreen() {
         <ThemedText style={[styles.body, { color: C.fadedInk }]}>We use your information to provide and improve the Service, send and receive SMS messages, extract and store memory facts for personalized responses, generate AI-powered responses, and authenticate your identity.</ThemedText>
 
         <ThemedText serif style={[styles.heading, { color: C.ink }]}>3. Consent to SMS Communication</ThemedText>
-        <ThemedText style={[styles.body, { color: C.fadedInk }]}>By verifying your phone number, you provide express written consent to receive recurring SMS messages from Lasu. Your phone number is used solely for delivering the Service and will not be shared with third parties for marketing purposes. You may withdraw consent at any time by texting STOP. For details on message frequency and opting out, see our Terms of Service.</ThemedText>
+        <ThemedText style={[styles.body, { color: C.fadedInk }]}>By verifying your phone number, you provide express written consent to receive recurring SMS messages from sudo. Your phone number is used solely for delivering the Service and will not be shared with third parties for marketing purposes. You may withdraw consent at any time by texting STOP. For details on message frequency and opting out, see our Terms of Service.</ThemedText>
 
         <ThemedText serif style={[styles.heading, { color: C.ink }]}>4. AI Processing</ThemedText>
         <ThemedText style={[styles.body, { color: C.fadedInk }]}>Your messages and stored memory are sent to third-party AI providers to generate responses. We send only the minimum context necessary. We use API configurations that do not permit training on your data.</ThemedText>
@@ -41,7 +41,7 @@ export default function PrivacyScreen() {
         <ThemedText style={[styles.body, { color: C.fadedInk }]}>The Service is not intended for anyone under 18 years of age. We do not knowingly collect information from children.</ThemedText>
 
         <ThemedText serif style={[styles.heading, { color: C.ink }]}>10. Contact</ThemedText>
-        <ThemedText style={[styles.body, { color: C.fadedInk }]}>For questions about this Privacy Policy, contact us at privacy@getlasu.com.</ThemedText>
+        <ThemedText style={[styles.body, { color: C.fadedInk }]}>For questions about this Privacy Policy, contact us at privacy@getsudo.com.</ThemedText>
       </ScrollView>
     </SafeAreaView>
   )

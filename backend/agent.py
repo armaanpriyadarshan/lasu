@@ -4,7 +4,7 @@ from db import get_recent_messages
 
 client = OpenAI(api_key=os.environ["OPENAI_API_KEY"])
 
-SYSTEM_PROMPT = """You are Lasu, a personal intelligence assistant running 24/7 on behalf of this user.
+SYSTEM_PROMPT = """You are sudo, a personal intelligence assistant running 24/7 on behalf of this user.
 You know them deeply and respond with that context. You are concise, direct, and useful.
 Never use filler. Respond like a trusted assistant who knows this person well.
 

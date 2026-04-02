@@ -4,11 +4,11 @@
 
 ## 1. Acceptance of terms
 
-By accessing or using Lasu ("the Service"), you agree to be bound by these Terms of Service. If you do not agree, do not use the Service.
+By accessing or using sudo ("the Service"), you agree to be bound by these Terms of Service. If you do not agree, do not use the Service.
 
 ## 2. Description of service
 
-Lasu is an AI-powered personal assistant that communicates via SMS and a companion application. The Service processes your messages, extracts and stores information you share, and responds on your behalf.
+sudo is an AI-powered personal assistant that communicates via SMS and a companion application. The Service processes your messages, extracts and stores information you share, and responds on your behalf.
 
 ## 3. Eligibility
 
@@ -45,7 +45,7 @@ By providing your phone number, you consent to receive SMS messages from the Ser
 
 ## 9. Intellectual property
 
-The Service and its original content, features, and functionality are owned by Lasu and are protected by applicable intellectual property laws. Your content remains yours.
+The Service and its original content, features, and functionality are owned by sudo and are protected by applicable intellectual property laws. Your content remains yours.
 
 ## 10. Termination
 
@@ -57,7 +57,7 @@ The Service is provided "as is" and "as available" without warranties of any kin
 
 ## 12. Limitation of liability
 
-In no event shall Lasu, its directors, employees, partners, agents, or affiliates be liable for any indirect, incidental, special, consequential, or punitive damages, including loss of profits, data, or other intangible losses, resulting from your use of or inability to use the Service.
+In no event shall sudo, its directors, employees, partners, agents, or affiliates be liable for any indirect, incidental, special, consequential, or punitive damages, including loss of profits, data, or other intangible losses, resulting from your use of or inability to use the Service.
 
 ## 13. Changes to terms
 
@@ -69,4 +69,4 @@ These Terms shall be governed by the laws of the State of California, without re
 
 ## 15. Contact
 
-For questions about these Terms, contact us at legal@lasu.ai.
+For questions about these Terms, contact us at legal@sudo.ai.

@@ -1,8 +1,12 @@
+import hashlib
+import hmac
 import os
+import time
+from urllib.parse import urlencode
 
 from fastapi import FastAPI, Form, HTTPException, Request
 from fastapi.middleware.cors import CORSMiddleware
-from fastapi.responses import PlainTextResponse
+from fastapi.responses import HTMLResponse, PlainTextResponse, RedirectResponse
 from dotenv import load_dotenv
 
 load_dotenv()
@@ -29,7 +33,7 @@ app.add_middleware(
 
 @app.get("/")
 def root():
-    return {"status": "lasu running"}
+    return {"status": "sudo running"}
 
 
 @app.get("/config")
@@ -53,11 +57,11 @@ async def handle_sms(From: str = Form(), Body: str = Form()):
     user = await get_user_by_phone(phone)
 
     if not user:
-        send_sms(phone, "Hey — download Lasu to get started.")
+        send_sms(phone, "Hey — download sudo to get started.")
         return ""
 
     if not user["verified"]:
-        send_sms(phone, "Please verify your number in the Lasu app first.")
+        send_sms(phone, "Please verify your number in the sudo app first.")
         return ""
 
     user_id = user["id"]
@@ -96,10 +100,57 @@ async def verify(req: VerifyRequest):
     return {"ok": True, "user_id": user["id"]}
 
 
-@app.post("/auth/telegram")
-async def auth_telegram():
-    user = await create_telegram_user()
-    return {"ok": True, "user_id": user["id"]}
+@app.get("/auth/telegram/login", response_class=HTMLResponse)
+async def telegram_login():
+    bot_username = os.environ.get("TELEGRAM_BOT_USERNAME", "superuser_do_bot")
+    origin = os.environ.get("APP_URL", "http://localhost:8000")
+    callback_url = f"{origin}/auth/telegram/callback"
+    return f"""<!DOCTYPE html>
+<html><head><meta name="viewport" content="width=device-width,initial-scale=1">
+<title>sudo — sign in with telegram</title>
+<style>body{{display:flex;justify-content:center;align-items:center;height:100vh;margin:0;background:#F5F0E6;font-family:serif}}</style>
+</head><body>
+<script async src="https://telegram.org/js/telegram-widget.js?22"
+  data-telegram-login="{bot_username}"
+  data-size="large"
+  data-auth-url="{callback_url}"
+  data-request-access="write"></script>
+</body></html>"""
+
+
+def verify_telegram_auth(data: dict) -> bool:
+    token = os.environ["TELEGRAM_BOT_TOKEN"]
+    check_hash = data.pop("hash", None)
+    if not check_hash:
+        return False
+    # Telegram says auth older than 1 day is invalid
+    if abs(time.time() - int(data.get("auth_date", 0))) > 86400:
+        return False
+    secret = hashlib.sha256(token.encode()).digest()
+    check_string = "\n".join(f"{k}={data[k]}" for k in sorted(data))
+    computed = hmac.new(secret, check_string.encode(), hashlib.sha256).hexdigest()
+    return computed == check_hash
+
+
+@app.get("/auth/telegram/callback")
+async def telegram_callback(request: Request):
+    params = dict(request.query_params)
+    data = {k: v for k, v in params.items()}
+    hash_value = data.get("hash", "")
+    telegram_id = int(data.get("id", 0))
+
+    if not verify_telegram_auth(data):
+        raise HTTPException(status_code=400, detail="Invalid Telegram auth")
+
+    # Find or create user by telegram_chat_id
+    user = await get_user_by_telegram(telegram_id)
+    if not user:
+        user = await create_telegram_user()
+        await link_telegram(user["id"], telegram_id)
+
+    user_id = user["id"]
+    scheme = os.environ.get("APP_SCHEME", "lasu")
+    return RedirectResponse(f"{scheme}://auth/telegram?user_id={user_id}")
 
 
 # --- User info ---
@@ -137,13 +188,13 @@ async def handle_telegram(request: Request):
             tg_send(chat_id, "Connected. Send me a message to get started.")
             return {"ok": True}
         else:
-            tg_send(chat_id, "Open the Lasu app to connect your account.")
+            tg_send(chat_id, "Open the sudo app to connect your account.")
             return {"ok": True}
 
     # Regular message
     user = await get_user_by_telegram(chat_id)
     if not user:
-        tg_send(chat_id, "Open the Lasu app to connect your account first.")
+        tg_send(chat_id, "Open the sudo app to connect your account first.")
         return {"ok": True}
 
     user_id = user["id"]

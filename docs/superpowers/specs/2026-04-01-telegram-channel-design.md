@@ -2,7 +2,7 @@
 
 ## Overview
 
-Add Telegram as a messaging channel for Lasu. Users can choose "Continue with Telegram" on the start page as an alternative to phone verification. The Telegram bot runs through the same agent loop as SMS — identical behavior, shared message history.
+Add Telegram as a messaging channel for sudo. Users can choose "Continue with Telegram" on the start page as an alternative to phone verification. The Telegram bot runs through the same agent loop as SMS — identical behavior, shared message history.
 
 ## User Flow
 
@@ -10,7 +10,7 @@ Add Telegram as a messaging channel for Lasu. Users can choose "Continue with Te
 1. User opens app, taps "Continue with Telegram"
 2. App calls `POST /auth/telegram` → receives `user_id`, signs in
 3. App navigates to `(app)`, setup screen detects no phone number
-4. Setup screen shows a deep link: `https://t.me/lasu?start={user_id}`
+4. Setup screen shows a deep link: `https://t.me/sudo?start={user_id}`
 5. User taps "Open in Telegram", sends first message
 6. Bot receives `/start {user_id}`, links `telegram_chat_id` to user row
 7. Subsequent messages go through agent loop, saved to messages table
@@ -77,7 +77,7 @@ ALTER TABLE users ADD COLUMN telegram_chat_id BIGINT UNIQUE;
 
 ## Telegram Bot Setup
 
-1. Message @BotFather on Telegram, create bot named "Lasu"
+1. Message @BotFather on Telegram, create bot named "sudo"
 2. Get token, set as `TELEGRAM_BOT_TOKEN`
 3. Set webhook: `POST https://api.telegram.org/bot{token}/setWebhook` with `url = https://{railway-url}/telegram`
 

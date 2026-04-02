@@ -4,7 +4,7 @@
 
 ## 1. Introduction
 
-Lasu ("we", "us", "our") operates an AI-powered personal assistant service. This Privacy Policy explains how we collect, use, store, and protect your personal information.
+sudo ("we", "us", "our") operates an AI-powered personal assistant service. This Privacy Policy explains how we collect, use, store, and protect your personal information.
 
 ## 2. Information we collect
 
@@ -64,7 +64,7 @@ You have the right to:
 - **Correction**: Update or correct your information.
 - **Opt out of SMS**: Text STOP to our number at any time.
 
-To exercise these rights, use the application settings or contact us at privacy@lasu.ai.
+To exercise these rights, use the application settings or contact us at privacy@sudo.ai.
 
 ## 9. Children's privacy
 
@@ -84,4 +84,4 @@ We may update this Privacy Policy from time to time. We will notify you of mater
 
 ## 13. Contact
 
-For questions about this Privacy Policy, contact us at privacy@lasu.ai.
+For questions about this Privacy Policy, contact us at privacy@sudo.ai.

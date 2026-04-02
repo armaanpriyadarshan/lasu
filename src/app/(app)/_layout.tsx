@@ -18,7 +18,7 @@ import { useAuth } from '@/lib/auth'
 import { getConfig, getMessages, getUser } from '@/lib/api'
 import { formatE164Display } from '@/lib/phone'
 
-const TELEGRAM_BOT = 'lasu'
+const TELEGRAM_BOT = 'superuser_do_bot'
 
 const isMobile = Platform.OS === 'ios' || Platform.OS === 'android'
 
@@ -94,10 +94,9 @@ export default function AppLayout() {
           <View style={styles.setupContent}>
             <Animated.View entering={FadeIn.duration(1200).delay(200)} style={styles.setupHeader}>
               <ThemedText serif style={[styles.setupTitle, { color: C.ink }]}>
-                {isTelegramUser ? 'Message Lasu on Telegram' : 'Text Lasu to get started'}
+                {isTelegramUser ? 'message sudo on telegram' : 'text sudo to get started'}
               </ThemedText>
               <ThemedText style={[styles.setupSubtitle, { color: C.graphite }]}>
-                Send any message to get started.{'\n'}
                 Say hi, ask a question, tell it about yourself.
               </ThemedText>
             </Animated.View>
@@ -157,7 +156,7 @@ export default function AppLayout() {
           {/* Logo */}
           <View style={styles.sidebarTop}>
             <ThemedText serif style={[styles.sidebarLogo, { color: C.ink }]}>
-              Lasu
+              sudo
             </ThemedText>
             <ThemedText style={[styles.sidebarSub, { color: C.pencil }]}>
               YOUR AI TWIN
