@@ -99,3 +99,30 @@ export async function getAgentMessages(agentId: string, limit = 50) {
   if (!res.ok) throw new Error('Failed to fetch messages')
   return res.json() as Promise<{ messages: AgentMessage[] }>
 }
+
+// ── Memory types ──
+
+export type AgentMemory = {
+  id: string
+  agent_id: string
+  key: string
+  value: string
+  source: string
+  confidence: number
+  created_at: string
+  updated_at: string
+}
+
+// ── Memory API ──
+
+export async function getAgentMemories(agentId: string) {
+  const res = await fetch(`${API_URL}/agents/${agentId}/memory`)
+  if (!res.ok) throw new Error('Failed to fetch memories')
+  return res.json() as Promise<{ memories: AgentMemory[] }>
+}
+
+export async function deleteAgentMemory(agentId: string, memoryId: string) {
+  const res = await fetch(`${API_URL}/agents/${agentId}/memory/${memoryId}`, { method: 'DELETE' })
+  if (!res.ok) throw new Error('Failed to delete memory')
+  return res.json() as Promise<{ ok: boolean }>
+}
