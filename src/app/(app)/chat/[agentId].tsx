@@ -146,16 +146,22 @@ export default function ChatScreen() {
       const { reply, tool_calls } = await chatWithAgent(agentId, userId, text)
       // Show tool activity before the reply
       if (tool_calls && tool_calls.length > 0) {
-        const toolSummary = tool_calls.map((tc: { tool: string; args: Record<string, unknown>; result: string }) =>
-          `[${tc.tool}] ${tc.result === 'permission_denied' ? 'Permission needed' : 'Done'}`
-        ).join('\n')
+        const toolSummary = tool_calls.map((tc: { tool: string; args: Record<string, unknown>; result: string }) => {
+          if (tc.result === 'permission_denied') return `[${tc.tool}] Permission needed`
+          if (tc.result.includes('not connected')) return `[${tc.tool}] Google account needed`
+          return `[${tc.tool}] Done`
+        }).join('\n')
         const toolMsg: AgentMessage = { role: 'assistant', content: `Tools used:\n${toolSummary}`, created_at: new Date().toISOString() }
         setMessages((prev) => [...prev, toolMsg])
+        // Show Google connect if any tool needs it
+        if (tool_calls.some((tc: { result: string }) => tc.result.includes('not connected') || tc.result.includes('Google account'))) {
+          setShowGoogleConnect(true)
+        }
       }
       const assistantMsg: AgentMessage = { role: 'assistant', content: reply, created_at: new Date().toISOString() }
       setMessages((prev) => [...prev, assistantMsg])
-      // Show Google connect prompt if agent needs it
-      if (reply.includes('Google account not connected') || reply.includes('connect your Google account')) {
+      // Show Google connect prompt if agent reply mentions it
+      if (reply.includes('Google account not connected') || reply.includes('connect your Google account') || reply.includes('Google account isn')) {
         setShowGoogleConnect(true)
       }
       // Refresh memories after each turn (extraction happens server-side)
