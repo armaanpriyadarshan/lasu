@@ -220,15 +220,26 @@ export default function ChatScreen() {
               await grantPermission(agentId, p).catch(() => {})
             }
             getAgentPermissions(agentId).then(({ permissions }) => setPermissions(permissions)).catch(() => {})
-            // Retry the last failed message now that Google is connected
+            // Silently retry — remove failed tool/reply messages, re-send without new user bubble
             if (lastFailedMessage.current) {
               const retryMsg = lastFailedMessage.current
               lastFailedMessage.current = null
-              setInput(retryMsg)
-              // Small delay to let permissions propagate, then auto-send
+              // Remove the "not connected" tool summary and agent reply, keep user message
+              setMessages((prev) => {
+                const cleaned = [...prev]
+                // Remove from the end: agent reply + tool summary (last 2 assistant messages)
+                let removed = 0
+                for (let i = cleaned.length - 1; i >= 0 && removed < 2; i--) {
+                  if (cleaned[i].role === 'assistant') {
+                    cleaned.splice(i, 1)
+                    removed++
+                  }
+                }
+                return cleaned
+              })
+              // Small delay for permissions to propagate, then retry silently
               setTimeout(() => {
-                setInput('')
-                handleSendMessage(retryMsg)
+                retryWithoutUserBubble(retryMsg)
               }, 1000)
             }
           }
@@ -307,6 +318,60 @@ export default function ChatScreen() {
         const idx = streamIdx.current
         if (idx >= 0 && updated[idx] && !updated[idx].content) {
           updated[idx] = { ...updated[idx], content: 'Something went wrong. Try again.' }
+        }
+        return updated
+      })
+    } finally {
+      // Stay in "sending" state if waiting for Google connect — retry will clear it
+      if (!lastFailedMessage.current) {
+        setSending(false)
+      }
+    }
+  }
+
+  const retryWithoutUserBubble = async (text: string) => {
+    if (!userId || !agentId) return
+    setSending(true)
+
+    const streamIdx = { current: -1 }
+    setMessages((prev) => {
+      streamIdx.current = prev.length
+      return [...prev, { role: 'assistant', content: '', created_at: new Date().toISOString() }]
+    })
+
+    try {
+      await chatWithAgentStream(
+        agentId, userId, text,
+        (token) => {
+          setMessages((prev) => {
+            const updated = [...prev]
+            if (streamIdx.current >= 0 && updated[streamIdx.current]) {
+              updated[streamIdx.current] = { ...updated[streamIdx.current], content: updated[streamIdx.current].content + token }
+            }
+            return updated
+          })
+        },
+        (toolCalls) => {
+          if (toolCalls.length > 0) {
+            const toolSummary = toolCalls.map((tc) => `[${tc.tool}] Done`).join('\n')
+            setMessages((prev) => {
+              const updated = [...prev]
+              updated.splice(streamIdx.current, 0, { role: 'assistant', content: `Tools used:\n${toolSummary}`, created_at: new Date().toISOString() })
+              streamIdx.current += 1
+              return updated
+            })
+          }
+        },
+        () => {
+          getAgentMemories(agentId).then(({ memories }) => setMemories(memories)).catch(() => {})
+          getPendingRequests(agentId).then(({ requests }) => setPermRequests(requests)).catch(() => {})
+        },
+      )
+    } catch {
+      setMessages((prev) => {
+        const updated = [...prev]
+        if (streamIdx.current >= 0 && updated[streamIdx.current] && !updated[streamIdx.current].content) {
+          updated[streamIdx.current] = { ...updated[streamIdx.current], content: 'Something went wrong. Try again.' }
         }
         return updated
       })
