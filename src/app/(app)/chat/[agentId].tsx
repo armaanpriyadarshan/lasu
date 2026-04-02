@@ -3,6 +3,7 @@ import {
   ActivityIndicator,
   FlatList,
   KeyboardAvoidingView,
+  Linking,
   Platform,
   Pressable,
   ScrollView,
@@ -22,6 +23,7 @@ import {
   getPendingRequests, grantPermissionRequest, denyPermissionRequest,
   getAgentPermissions, revokePermission,
   getJobs, createJob, updateJob, deleteJob,
+  getGoogleAuthUrl,
   type Agent, type AgentMessage, type AgentMemory,
   type PermissionRequest, type AgentPermission, type AgentJob,
 } from '@/lib/api'
@@ -46,6 +48,7 @@ export default function ChatScreen() {
   const [permissions, setPermissions] = useState<AgentPermission[]>([])
   const [showPermissions, setShowPermissions] = useState(false)
   const [heartbeat, setHeartbeat] = useState<AgentJob | null>(null)
+  const [showGoogleConnect, setShowGoogleConnect] = useState(false)
 
   useFocusEffect(
     useCallback(() => {
@@ -121,6 +124,15 @@ export default function ChatScreen() {
     } catch {}
   }
 
+  const handleConnectGoogle = async () => {
+    if (!userId) return
+    try {
+      const { url } = await getGoogleAuthUrl(userId)
+      Linking.openURL(url)
+      setShowGoogleConnect(false)
+    } catch {}
+  }
+
   const handleSend = async () => {
     if (!userId || !agentId || !input.trim() || sending) return
     const text = input.trim()
@@ -142,6 +154,10 @@ export default function ChatScreen() {
       }
       const assistantMsg: AgentMessage = { role: 'assistant', content: reply, created_at: new Date().toISOString() }
       setMessages((prev) => [...prev, assistantMsg])
+      // Show Google connect prompt if agent needs it
+      if (reply.includes('Google account not connected') || reply.includes('connect your Google account')) {
+        setShowGoogleConnect(true)
+      }
       // Refresh memories after each turn (extraction happens server-side)
       getAgentMemories(agentId).then(({ memories }) => setMemories(memories)).catch(() => {})
       getPendingRequests(agentId).then(({ requests }) => setPermRequests(requests)).catch(() => {})
@@ -326,6 +342,30 @@ export default function ChatScreen() {
               </View>
             </View>
           ))}
+        </View>
+      )}
+
+      {showGoogleConnect && (
+        <View style={styles.permRequestBar}>
+          <View style={styles.permRequestCard}>
+            <ThemedText style={[styles.permRequestText, { color: C.fadedInk }]}>
+              {agent?.name} needs access to your Google account
+            </ThemedText>
+            <ThemedText style={[styles.permRequestReason, { color: C.pencil }]}>
+              Connect Google to use calendar, email, contacts, and drive tools.
+            </ThemedText>
+            <View style={styles.permRequestActions}>
+              <Pressable
+                onPress={handleConnectGoogle}
+                style={[styles.permBtn, styles.permBtnFilled]}
+              >
+                <ThemedText style={[styles.permBtnText, { color: C.white }]}>Connect Google</ThemedText>
+              </Pressable>
+              <Pressable onPress={() => setShowGoogleConnect(false)}>
+                <ThemedText style={{ color: C.pencil, fontSize: 12 }}>Dismiss</ThemedText>
+              </Pressable>
+            </View>
+          </View>
         </View>
       )}
 
