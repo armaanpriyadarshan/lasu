@@ -227,9 +227,9 @@ export default function ChatScreen() {
           <ThemedText serif style={[styles.memoryTitle, { color: C.ink }]}>
             Permissions
           </ThemedText>
-          {permissions.length === 0 ? (
+          {permissions.filter((p) => p.grant_type === 'permanent').length === 0 ? (
             <ThemedText style={[styles.memoryEmpty, { color: C.pencil }]}>
-              No permissions granted yet.
+              No permissions granted yet. When {agent?.name} needs access to something, it will ask.
             </ThemedText>
           ) : (
             permissions.filter((p) => p.grant_type === 'permanent').map((perm) => (
@@ -457,7 +457,8 @@ const styles = StyleSheet.create({
     borderBottomWidth: 0.5,
     borderBottomColor: C.ruledLine,
     padding: 16,
-    height: 700,
+    maxHeight: 400,
+    minHeight: 80,
   },
   memoryTitle: {
     fontSize: 16,
