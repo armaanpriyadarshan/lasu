@@ -109,3 +109,40 @@ async def save_agent_message(agent_id: str, user_id: str, role: str, content: st
         "content": content,
         "channel": "app",
     }).execute()
+
+
+# ── Memory functions ──
+
+async def get_agent_memories(agent_id: str) -> list:
+    res = (
+        supabase.table("agent_memory")
+        .select("*")
+        .eq("agent_id", agent_id)
+        .order("updated_at", desc=True)
+        .execute()
+    )
+    return res.data
+
+
+async def upsert_memory(agent_id: str, key: str, value: str, source: str = "extracted", confidence: float = 0.8):
+    res = (
+        supabase.table("agent_memory")
+        .upsert(
+            {
+                "agent_id": agent_id,
+                "key": key,
+                "value": value,
+                "source": source,
+                "confidence": confidence,
+                "updated_at": "now()",
+            },
+            on_conflict="agent_id,key",
+        )
+        .execute()
+    )
+    return res.data[0] if res.data else None
+
+
+async def delete_memory(memory_id: str) -> bool:
+    res = supabase.table("agent_memory").delete().eq("id", memory_id).execute()
+    return len(res.data) > 0
