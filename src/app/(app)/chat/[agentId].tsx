@@ -21,8 +21,9 @@ import {
   getAgentMemories, deleteAgentMemory,
   getPendingRequests, grantPermissionRequest, denyPermissionRequest,
   getAgentPermissions, revokePermission,
+  getJobs, createJob, updateJob, deleteJob,
   type Agent, type AgentMessage, type AgentMemory,
-  type PermissionRequest, type AgentPermission,
+  type PermissionRequest, type AgentPermission, type AgentJob,
 } from '@/lib/api'
 
 const C = Colors.light
@@ -44,6 +45,7 @@ export default function ChatScreen() {
   const [permRequests, setPermRequests] = useState<PermissionRequest[]>([])
   const [permissions, setPermissions] = useState<AgentPermission[]>([])
   const [showPermissions, setShowPermissions] = useState(false)
+  const [heartbeat, setHeartbeat] = useState<AgentJob | null>(null)
 
   useFocusEffect(
     useCallback(() => {
@@ -55,13 +57,15 @@ export default function ChatScreen() {
         getAgentMemories(agentId),
         getPendingRequests(agentId),
         getAgentPermissions(agentId),
+        getJobs(agentId),
       ])
-        .then(([agentData, { messages }, { memories }, { requests }, { permissions }]) => {
+        .then(([agentData, { messages }, { memories }, { requests }, { permissions }, { jobs }]) => {
           setAgent(agentData)
           setMessages(messages)
           setMemories(memories)
           setPermRequests(requests)
           setPermissions(permissions)
+          setHeartbeat(jobs.find((j: AgentJob) => j.job_type === 'heartbeat') || null)
         })
         .catch(() => router.back())
         .finally(() => setLoading(false))
@@ -96,6 +100,24 @@ export default function ChatScreen() {
     try {
       await revokePermission(agentId, permissionId)
       setPermissions((prev) => prev.filter((p) => p.id !== permissionId))
+    } catch {}
+  }
+
+  const handleToggleHeartbeat = async () => {
+    if (!agentId) return
+    try {
+      if (heartbeat) {
+        if (heartbeat.enabled) {
+          const updated = await updateJob(agentId, heartbeat.id, { enabled: false })
+          setHeartbeat(updated)
+        } else {
+          const updated = await updateJob(agentId, heartbeat.id, { enabled: true })
+          setHeartbeat(updated)
+        }
+      } else {
+        const job = await createJob(agentId, 30)
+        setHeartbeat(job)
+      }
     } catch {}
   }
 
@@ -153,6 +175,11 @@ export default function ChatScreen() {
           </ThemedText>
         </View>
         <View style={styles.headerRight}>
+          <Pressable onPress={handleToggleHeartbeat}>
+            <ThemedText style={{ color: heartbeat?.enabled ? C.connectedText : C.pencil, fontSize: 11 }}>
+              {heartbeat?.enabled ? 'Live' : 'Idle'}
+            </ThemedText>
+          </Pressable>
           <Pressable onPress={() => { setShowPermissions(!showPermissions); setShowMemory(false) }}>
             <ThemedText style={{ color: showPermissions ? C.tide : C.pencil, fontSize: 11 }}>
               {permissions.length > 0 ? `Perms (${permissions.length})` : 'Perms'}
