@@ -54,6 +54,8 @@ export type Agent = {
   description: string
   system_prompt: string
   model: string
+  emoji: string
+  tone: string
   is_active: boolean
   created_at: string
   updated_at: string
@@ -67,11 +69,11 @@ export type AgentMessage = {
 
 // ── Agent API ──
 
-export async function createAgent(userId: string, name: string, description: string) {
+export async function createAgent(userId: string, name: string, description: string, emoji = '🤖', tone = 'balanced') {
   const res = await authFetch(`${API_URL}/agents`, {
     method: 'POST',
     headers: { 'Content-Type': 'application/json' },
-    body: JSON.stringify({ user_id: userId, name, description }),
+    body: JSON.stringify({ user_id: userId, name, description, emoji, tone }),
   })
   if (!res.ok) {
     const err = await res.json().catch(() => ({ detail: 'Failed to create agent' }))

@@ -115,7 +115,7 @@ async def get_dashboard_stats(user_id: str) -> dict:
 AGENT_LIMITS = {"free": 1, "pro": 5, "enterprise": 25}
 
 
-async def create_agent(user_id: str, name: str, description: str, system_prompt: str):
+async def create_agent(user_id: str, name: str, description: str, system_prompt: str, emoji: str = "🤖", tone: str = "balanced"):
     existing = supabase.table("agents").select("id").eq("user_id", user_id).eq("is_active", True).execute()
     if len(existing.data) >= 5:
         raise ValueError("Agent limit reached")
@@ -124,6 +124,8 @@ async def create_agent(user_id: str, name: str, description: str, system_prompt:
         "name": name,
         "description": description,
         "system_prompt": system_prompt,
+        "emoji": emoji,
+        "tone": tone,
     }).execute()
     return res.data[0] if res.data else None
 

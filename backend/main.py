@@ -78,7 +78,7 @@ async def create_agent_endpoint(req: CreateAgentRequest, _user: str = Depends(ge
     await get_or_create_user(req.user_id)
     system_prompt = await generate_system_prompt(req.description)
     try:
-        agent = await create_agent(req.user_id, req.name, req.description, system_prompt)
+        agent = await create_agent(req.user_id, req.name, req.description, system_prompt, req.emoji, req.tone)
     except ValueError as e:
         raise HTTPException(status_code=403, detail=str(e))
     return agent

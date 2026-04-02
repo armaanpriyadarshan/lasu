@@ -1,4 +1,4 @@
-import { useCallback, useRef, useState } from 'react'
+import React, { useCallback, useRef, useState } from 'react'
 import {
   ActivityIndicator,
   FlatList,
@@ -227,9 +227,16 @@ export default function ChatScreen() {
         ListHeaderComponent={
           <Animated.View entering={FadeIn.duration(400)} style={styles.profileCenter}>
             <View style={styles.avatar}>
-              <ThemedText style={[styles.avatarText, { color: C.white }]}>
-                {agent?.name.charAt(0).toUpperCase()}
-              </ThemedText>
+              {agent?.emoji?.startsWith('http') ? (
+                isWeb ? React.createElement('img', {
+                  src: agent.emoji,
+                  style: { width: 52, height: 52, borderRadius: 16, objectFit: 'cover' },
+                }) : null
+              ) : (
+                <ThemedText style={styles.avatarEmoji}>
+                  {agent?.emoji || agent?.name.charAt(0).toUpperCase()}
+                </ThemedText>
+              )}
             </View>
             <View style={styles.nameRow}>
               <ThemedText serif style={[styles.agentName, { color: C.ink }]}>
@@ -378,17 +385,16 @@ const styles = StyleSheet.create({
     borderRadius: 4,
   },
   avatar: {
-    width: 48,
-    height: 48,
-    borderRadius: 24,
-    backgroundColor: C.tide,
+    width: 52,
+    height: 52,
+    borderRadius: 16,
+    backgroundColor: C.agedPaper,
     alignItems: 'center',
     justifyContent: 'center',
     marginBottom: 4,
   },
-  avatarText: {
-    fontSize: 20,
-    fontWeight: '600',
+  avatarEmoji: {
+    fontSize: 28,
   },
   agentName: {
     fontSize: 18,
