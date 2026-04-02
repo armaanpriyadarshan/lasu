@@ -1,6 +1,6 @@
 import { supabase } from './supabase'
 
-export const API_URL = __DEV__ ? 'http://localhost:8000' : 'https://your-railway-url.railway.app'
+export const API_URL = __DEV__ ? 'http://localhost:8001' : 'https://your-railway-url.railway.app'
 
 async function authFetch(url: string, opts: RequestInit = {}): Promise<Response> {
   const { data: { session } } = await supabase.auth.getSession()
