@@ -10,8 +10,10 @@ from db import (
     save_message, get_recent_messages, get_or_create_user,
     create_agent, get_agents, get_agent, update_agent, delete_agent,
     get_agent_messages, save_agent_message,
+    get_agent_memories, upsert_memory, delete_memory,
 )
 from agent import run_agent, run_agent_chat, generate_system_prompt
+from memory import extract_memories
 from models import MessageRequest, CreateAgentRequest, UpdateAgentRequest, ChatRequest
 
 app = FastAPI()
@@ -106,6 +108,14 @@ async def chat_with_agent(agent_id: str, req: ChatRequest):
 
     await save_agent_message(agent_id, req.user_id, "assistant", reply)
 
+    # Extract and save memories (non-critical, don't fail the response)
+    try:
+        memories = await extract_memories(req.message, reply)
+        for mem in memories:
+            await upsert_memory(agent_id, mem["key"], mem["value"])
+    except Exception:
+        pass
+
     return {"reply": reply}
 
 
@@ -113,3 +123,19 @@ async def chat_with_agent(agent_id: str, req: ChatRequest):
 async def get_agent_messages_endpoint(agent_id: str, limit: int = 50):
     messages = await get_agent_messages(agent_id, limit)
     return {"messages": messages}
+
+
+# --- Memory endpoints ---
+
+@app.get("/agents/{agent_id}/memory")
+async def get_memories(agent_id: str):
+    memories = await get_agent_memories(agent_id)
+    return {"memories": memories}
+
+
+@app.delete("/agents/{agent_id}/memory/{memory_id}")
+async def delete_memory_endpoint(agent_id: str, memory_id: str):
+    success = await delete_memory(memory_id)
+    if not success:
+        raise HTTPException(status_code=404, detail="Memory not found")
+    return {"ok": True}
