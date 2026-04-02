@@ -14,15 +14,12 @@ export default function PrivacyScreen() {
         <ThemedText serif style={[styles.title, { color: C.ink }]}>Privacy Policy</ThemedText>
 
         <ThemedText serif style={[styles.heading, { color: C.ink }]}>1. Information We Collect</ThemedText>
-        <ThemedText style={[styles.body, { color: C.fadedInk }]}>We collect your phone number for authentication and SMS communication, the content of messages you send and receive, and memory data (facts extracted from your conversations). We also collect usage data such as timestamps and interaction patterns.</ThemedText>
+        <ThemedText style={[styles.body, { color: C.fadedInk }]}>We collect your email address for authentication, the content of messages you send and receive, and memory data (facts extracted from your conversations). We also collect usage data such as timestamps and interaction patterns.</ThemedText>
 
         <ThemedText serif style={[styles.heading, { color: C.ink }]}>2. How We Use Your Information</ThemedText>
-        <ThemedText style={[styles.body, { color: C.fadedInk }]}>We use your information to provide and improve the Service, send and receive SMS messages, extract and store memory facts for personalized responses, generate AI-powered responses, and authenticate your identity.</ThemedText>
+        <ThemedText style={[styles.body, { color: C.fadedInk }]}>We use your information to provide and improve the Service, extract and store memory facts for personalized responses, generate AI-powered responses, and authenticate your identity.</ThemedText>
 
-        <ThemedText serif style={[styles.heading, { color: C.ink }]}>3. Consent to SMS Communication</ThemedText>
-        <ThemedText style={[styles.body, { color: C.fadedInk }]}>By verifying your phone number, you provide express written consent to receive recurring SMS messages from sudo. Your phone number is used solely for delivering the Service and will not be shared with third parties for marketing purposes. You may withdraw consent at any time by texting STOP. For details on message frequency and opting out, see our Terms of Service.</ThemedText>
-
-        <ThemedText serif style={[styles.heading, { color: C.ink }]}>4. AI Processing</ThemedText>
+        <ThemedText serif style={[styles.heading, { color: C.ink }]}>3. AI Processing</ThemedText>
         <ThemedText style={[styles.body, { color: C.fadedInk }]}>Your messages and stored memory are sent to third-party AI providers to generate responses. We send only the minimum context necessary. We use API configurations that do not permit training on your data.</ThemedText>
 
         <ThemedText serif style={[styles.heading, { color: C.ink }]}>5. Data Storage and Security</ThemedText>
@@ -32,10 +29,10 @@ export default function PrivacyScreen() {
         <ThemedText style={[styles.body, { color: C.fadedInk }]}>Messages and memory data are retained for the lifetime of your account. Upon account deletion, we will delete your data within 30 days, except where retention is required by law.</ThemedText>
 
         <ThemedText serif style={[styles.heading, { color: C.ink }]}>7. Data Sharing</ThemedText>
-        <ThemedText style={[styles.body, { color: C.fadedInk }]}>We do not sell your personal information. We share data only with AI providers (for generating responses), Twilio (for SMS delivery), Supabase (for data storage), and law enforcement when required by law.</ThemedText>
+        <ThemedText style={[styles.body, { color: C.fadedInk }]}>We do not sell your personal information. We share data only with AI providers (for generating responses), Supabase (for data storage and authentication), and law enforcement when required by law.</ThemedText>
 
         <ThemedText serif style={[styles.heading, { color: C.ink }]}>8. Your Rights</ThemedText>
-        <ThemedText style={[styles.body, { color: C.fadedInk }]}>You have the right to access, delete, export, and correct your data. You can opt out of SMS by texting STOP at any time. To exercise these rights, use the application settings or contact us.</ThemedText>
+        <ThemedText style={[styles.body, { color: C.fadedInk }]}>You have the right to access, delete, export, and correct your data. To exercise these rights, use the application settings or contact us.</ThemedText>
 
         <ThemedText serif style={[styles.heading, { color: C.ink }]}>9. Children's Privacy</ThemedText>
         <ThemedText style={[styles.body, { color: C.fadedInk }]}>The Service is not intended for anyone under 18 years of age. We do not knowingly collect information from children.</ThemedText>

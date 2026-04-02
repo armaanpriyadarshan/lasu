@@ -32,7 +32,7 @@ function relativeTime(minutesAgo: number) {
 // ── Mock data ────────────────────────────────────────────────────────
 const STATS = [
   { label: 'Messages today', value: '12', subtitle: '+3 from yesterday', positive: true },
-  { label: 'Active channels', value: '2', subtitle: 'SMS, Email', positive: false },
+  { label: 'Memory facts', value: '24', subtitle: '+5 this week', positive: true },
   { label: 'Skills running', value: '3', subtitle: 'All healthy', positive: true },
 ]
 
@@ -47,7 +47,7 @@ type ActivityItem = {
 const ACTIVITY: ActivityItem[] = [
   {
     id: '1',
-    text: 'Sent morning digest to SMS',
+    text: 'Sent morning digest',
     minutesAgo: 2,
     dotColor: C.connectedText,
     badge: { label: 'delivered', bg: C.connected, text: C.connectedText },
@@ -60,7 +60,7 @@ const ACTIVITY: ActivityItem[] = [
   },
   {
     id: '3',
-    text: 'Received message from +1 (555) 234-5678',
+    text: 'Received message from user',
     minutesAgo: 4,
     dotColor: C.tide,
     badge: { label: 'inbound', bg: C.info, text: C.infoText },
@@ -88,8 +88,7 @@ const ACTIVITY: ActivityItem[] = [
 ]
 
 const CHANNELS = [
-  { name: 'SMS', color: C.connectedText },
-  { name: 'Email', color: C.connectedText },
+  { name: 'App', color: C.connectedText },
 ]
 
 // ── Components ───────────────────────────────────────────────────────

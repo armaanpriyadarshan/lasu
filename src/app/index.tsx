@@ -10,111 +10,61 @@ import {
 import { SafeAreaView } from 'react-native-safe-area-context'
 import Animated, { FadeIn } from 'react-native-reanimated'
 import { useRouter } from 'expo-router'
-import * as WebBrowser from 'expo-web-browser'
-import * as Linking from 'expo-linking'
 
 import { ThemedText } from '@/components/themed-text'
 import { Colors } from '@/constants/theme'
 import { useAuth } from '@/lib/auth'
-import { sendCode, verifyCode } from '@/lib/api'
-import { formatToE164, formatPhone } from '@/lib/phone'
-import { API_URL } from '@/lib/api'
 
 const C = Colors.light
 const isWeb = Platform.OS === 'web'
 
-// ── Main page ────────────────────────────────────────────────────────
 export default function StartPage() {
   const router = useRouter()
-  const { userId, loading: authLoading, signIn } = useAuth()
+  const { userId, loading: authLoading, signIn, signUp, signInWithGoogle } = useAuth()
 
-  const [step, setStep] = useState<'phone' | 'code'>('phone')
-  const [phone, setPhone] = useState('')
-  const [code, setCode] = useState('')
+  const [mode, setMode] = useState<'signin' | 'signup'>('signin')
+  const [email, setEmail] = useState('')
+  const [password, setPassword] = useState('')
   const [loading, setLoading] = useState(false)
   const [error, setError] = useState('')
-  const codeRefs = useRef<(TextInput | null)[]>([])
+  const passwordRef = useRef<TextInput>(null)
 
   useEffect(() => {
     if (!authLoading && userId) router.replace('/(app)')
   }, [authLoading, userId])
 
-
-  const handleSendCode = async () => {
+  const handleSubmit = async () => {
+    if (!email || !password) {
+      setError('Enter your email and password.')
+      return
+    }
     setError('')
     setLoading(true)
     try {
-      await sendCode(formatToE164(phone))
-      setStep('code')
-    } catch {
-      setError('Failed to send code. Check your number.')
-    } finally {
-      setLoading(false)
-    }
-  }
-
-  const handleVerifyCode = async (codeValue: string) => {
-    if (codeValue.length < 6) return
-    setError('')
-    setLoading(true)
-    try {
-      const result = await verifyCode(formatToE164(phone), codeValue)
-      await signIn(result.user_id)
-      router.replace('/(app)')
-    } catch {
-      setError('Invalid code. Try again.')
-    } finally {
-      setLoading(false)
-    }
-  }
-
-  const handleCodeDigit = (text: string, i: number) => {
-    const digits = code.split('')
-    if (text) {
-      digits[i] = text[text.length - 1]
-      const joined = digits.join('')
-      setCode(joined)
-      if (joined.length === 6) {
-        codeRefs.current[i]?.blur()
-        setTimeout(() => handleVerifyCode(joined), 50)
-      } else if (i < 5) {
-        codeRefs.current[i + 1]?.focus()
+      if (mode === 'signup') {
+        await signUp(email, password)
+      } else {
+        await signIn(email, password)
       }
-    } else {
-      digits[i] = ''
-      setCode(digits.join(''))
-      if (i > 0) codeRefs.current[i - 1]?.focus()
+      router.replace('/(app)')
+    } catch (e: any) {
+      setError(e?.message || 'Something went wrong.')
+    } finally {
+      setLoading(false)
     }
   }
 
-  const handleTelegram = async () => {
+  const handleGoogle = async () => {
     setError('')
     setLoading(true)
     try {
-      const redirectUrl = Linking.createURL('auth/telegram')
-      await WebBrowser.openAuthSessionAsync(
-        `${API_URL}/auth/telegram/login`,
-        redirectUrl,
-      )
+      await signInWithGoogle()
     } catch {
       setError('Something went wrong. Try again.')
     } finally {
       setLoading(false)
     }
   }
-
-  // Handle deep link callback from Telegram OAuth
-  useEffect(() => {
-    const handleUrl = async ({ url }: { url: string }) => {
-      const parsed = Linking.parse(url)
-      if (parsed.path === 'auth/telegram' && parsed.queryParams?.user_id) {
-        await signIn(parsed.queryParams.user_id as string)
-        router.replace('/(app)')
-      }
-    }
-    const sub = Linking.addEventListener('url', handleUrl)
-    return () => sub.remove()
-  }, [])
 
   if (authLoading) return <View style={styles.page} />
 
@@ -136,151 +86,115 @@ export default function StartPage() {
             </Animated.View>
           </View>
 
-          {/* Input */}
+          {/* Form */}
           <Animated.View
             entering={FadeIn.duration(1200).delay(1600)}
             style={styles.inputArea}
           >
-            {step === 'phone' ? (
-              <View key="phone" style={styles.card}>
-                <View style={styles.phoneRow}>
-                  <ThemedText style={[styles.prefix, { color: C.pencil }]}>
-                    +1
-                  </ThemedText>
-                  <TextInput
-                    style={styles.phoneInput}
-                    placeholder="(555) 000-0000"
-                    placeholderTextColor={C.pencil}
-                    keyboardType="phone-pad"
-                    returnKeyType="go"
-                    onSubmitEditing={handleSendCode}
-                    value={formatPhone(phone)}
-                    onChangeText={(t) => {
-                      setPhone(t.replace(/\D/g, '').slice(0, 10))
-                      setError('')
-                    }}
-                    maxLength={14}
-                    autoFocus
-                  />
-                  {loading ? (
-                    <ActivityIndicator color={C.pencil} size="small" />
-                  ) : (
-                    <Pressable
-                      onPress={handleSendCode}
-                      style={({ pressed }) => [
-                        styles.enterBtn,
-                        pressed && styles.enterBtnPressed,
-                      ]}
-                    >
-                      <ThemedText style={[styles.enterArrow, { color: C.pencil }]}>
-                        ↵
-                      </ThemedText>
-                    </Pressable>
-                  )}
-                </View>
+            <View style={styles.card}>
+              <TextInput
+                style={styles.input}
+                placeholder="email"
+                placeholderTextColor={C.pencil}
+                keyboardType="email-address"
+                autoCapitalize="none"
+                autoCorrect={false}
+                returnKeyType="next"
+                onSubmitEditing={() => passwordRef.current?.focus()}
+                value={email}
+                onChangeText={(t) => { setEmail(t); setError('') }}
+              />
+              <TextInput
+                ref={passwordRef}
+                style={styles.input}
+                placeholder="password"
+                placeholderTextColor={C.pencil}
+                secureTextEntry
+                returnKeyType="go"
+                onSubmitEditing={handleSubmit}
+                value={password}
+                onChangeText={(t) => { setPassword(t); setError('') }}
+              />
 
-                {error ? (
-                  <ThemedText style={styles.error}>{error}</ThemedText>
-                ) : null}
+              {error ? (
+                <ThemedText style={styles.error}>{error}</ThemedText>
+              ) : null}
 
-                <ThemedText style={[styles.dividerText, { color: C.pencil }]}>or</ThemedText>
-
-                <Pressable
-                  onPress={handleTelegram}
-                  dataSet={{ hover: 'ghost' }}
-                  style={({ pressed }) => [
-                    styles.telegramBtn,
-                    pressed && styles.telegramBtnPressed,
-                  ]}
-                >
-                  <ThemedText style={[styles.telegramText, { color: C.fadedInk }]}>
-                    Continue with Telegram
-                  </ThemedText>
-                </Pressable>
-
-                <View style={styles.legal}>
-                  <ThemedText style={[styles.legalText, { color: C.ruledLine }]}>
-                    By continuing, you agree to our{' '}
-                  </ThemedText>
-                  <Pressable
-                    onPress={() => router.push('/terms')}
-                    style={({ pressed }) => pressed && { opacity: 0.5 }}
-                  >
-                    <ThemedText style={[styles.legalLink, { color: C.pencil }]}>
-                      terms of service
-                    </ThemedText>
-                  </Pressable>
-                  <ThemedText style={[styles.legalText, { color: C.ruledLine }]}>
-                    {' '}and{' '}
-                  </ThemedText>
-                  <Pressable
-                    onPress={() => router.push('/privacy')}
-                    style={({ pressed }) => pressed && { opacity: 0.5 }}
-                  >
-                    <ThemedText style={[styles.legalLink, { color: C.pencil }]}>
-                      privacy policy
-                    </ThemedText>
-                  </Pressable>
-                </View>
-              </View>
-            ) : (
-              <View key="code" style={styles.card}>
-                <ThemedText
-                  type="small"
-                  style={[styles.codeHint, { color: C.pencil }]}
-                >
-                  Code sent to +1 {formatPhone(phone)}
-                </ThemedText>
-
-                <View style={styles.codeRow}>
-                  {Array.from({ length: 6 }).map((_, i) => (
-                    <TextInput
-                      key={i}
-                      ref={(r) => {
-                        codeRefs.current[i] = r
-                      }}
-                      style={[
-                        styles.codeBox,
-                        code[i] ? styles.codeBoxFill : styles.codeBoxEmpty,
-                      ]}
-                      keyboardType="number-pad"
-                      maxLength={1}
-                      value={code[i] ?? ''}
-                      onChangeText={(t) => handleCodeDigit(t, i)}
-                      autoFocus={i === 0}
-                      selectTextOnFocus
-                    />
-                  ))}
-                </View>
-
-                {error ? (
-                  <ThemedText style={styles.error}>{error}</ThemedText>
-                ) : null}
-
+              <Pressable
+                onPress={handleSubmit}
+                disabled={loading}
+                dataSet={{ hover: 'ghost' }}
+                style={({ pressed }) => [
+                  styles.submitBtn,
+                  pressed && styles.submitBtnPressed,
+                ]}
+              >
                 {loading ? (
-                  <ActivityIndicator color={C.pencil} size="small" style={{ marginTop: 8 }} />
-                ) : null}
+                  <ActivityIndicator color={C.pencil} size="small" />
+                ) : (
+                  <ThemedText style={[styles.submitText, { color: C.fadedInk }]}>
+                    {mode === 'signup' ? 'sign up' : 'sign in'}
+                  </ThemedText>
+                )}
+              </Pressable>
 
+              <ThemedText style={[styles.dividerText, { color: C.pencil }]}>or</ThemedText>
+
+              <Pressable
+                onPress={handleGoogle}
+                dataSet={{ hover: 'ghost' }}
+                style={({ pressed }) => [
+                  styles.googleBtn,
+                  pressed && styles.googleBtnPressed,
+                ]}
+              >
+                <ThemedText style={[styles.googleText, { color: C.fadedInk }]}>
+                  continue with google
+                </ThemedText>
+              </Pressable>
+
+              <Pressable
+                onPress={() => {
+                  setMode(mode === 'signin' ? 'signup' : 'signin')
+                  setError('')
+                }}
+                style={({ pressed }) => [
+                  styles.ghost,
+                  pressed && styles.ghostPressed,
+                ]}
+              >
+                <ThemedText type="small" style={{ color: C.pencil }}>
+                  {mode === 'signin' ? "don't have an account? sign up" : 'already have an account? sign in'}
+                </ThemedText>
+              </Pressable>
+
+              <View style={styles.legal}>
+                <ThemedText style={[styles.legalText, { color: C.ruledLine }]}>
+                  By continuing, you agree to our{' '}
+                </ThemedText>
                 <Pressable
-                  onPress={() => {
-                    setStep('phone')
-                    setCode('')
-                    setError('')
-                  }}
-                  style={({ pressed }) => [
-                    styles.ghost,
-                    pressed && styles.ghostPressed,
-                  ]}
+                  onPress={() => router.push('/terms')}
+                  style={({ pressed }) => pressed && { opacity: 0.5 }}
                 >
-                  <ThemedText type="small" style={{ color: C.pencil }}>
-                    Use a different number
+                  <ThemedText style={[styles.legalLink, { color: C.pencil }]}>
+                    terms of service
+                  </ThemedText>
+                </Pressable>
+                <ThemedText style={[styles.legalText, { color: C.ruledLine }]}>
+                  {' '}and{' '}
+                </ThemedText>
+                <Pressable
+                  onPress={() => router.push('/privacy')}
+                  style={({ pressed }) => pressed && { opacity: 0.5 }}
+                >
+                  <ThemedText style={[styles.legalLink, { color: C.pencil }]}>
+                    privacy policy
                   </ThemedText>
                 </Pressable>
               </View>
-            )}
+            </View>
           </Animated.View>
         </View>
-
       </SafeAreaView>
     </View>
   )
@@ -303,8 +217,6 @@ const styles = StyleSheet.create({
     alignItems: 'center',
     paddingHorizontal: 24,
   },
-
-  // ── Header ──
   header: {
     alignItems: 'center',
     marginBottom: 48,
@@ -324,8 +236,6 @@ const styles = StyleSheet.create({
     textTransform: 'uppercase',
     ...(isWeb && { fontFamily: 'var(--font-mono)' } as any),
   },
-
-  // ── Input area ──
   inputArea: {
     width: '100%',
     maxWidth: 340,
@@ -335,93 +245,62 @@ const styles = StyleSheet.create({
     gap: 16,
     alignItems: 'center',
   },
-
-  // ── Phone ──
-  phoneRow: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: 8,
+  input: {
     width: '100%',
+    fontSize: 16,
+    color: C.ink,
+    fontWeight: '400',
     borderBottomWidth: 1,
     borderBottomColor: C.ruledLine,
     paddingBottom: 6,
-  },
-  prefix: {
-    fontSize: 18,
-    fontWeight: '400',
-    ...(isWeb && { fontFamily: 'var(--font-display)' } as any),
-  },
-  phoneInput: {
-    flex: 1,
-    fontSize: 18,
-    color: C.ink,
-    fontWeight: '400',
     ...(isWeb && {
       outlineStyle: 'none',
       fontFamily: 'var(--font-display)',
     } as any),
   },
-
-  // ── Code ──
-  codeHint: {
-    textAlign: 'center',
-    marginBottom: 4,
-  },
-  codeRow: {
-    flexDirection: 'row',
-    gap: 8,
-  },
-  codeBox: {
-    width: 44,
-    height: 50,
-    borderRadius: 8,
-    fontSize: 20,
-    color: C.ink,
-    textAlign: 'center',
-    backgroundColor: C.agedPaper,
-    ...(isWeb && {
-      outlineStyle: 'none',
-      fontFamily: 'var(--font-display)',
-      transition: 'border-color 200ms ease',
-    } as any),
-  },
-  codeBoxFill: {
-    borderWidth: 2,
-    borderColor: C.tide,
-  },
-  codeBoxEmpty: {
-    borderWidth: 0.5,
-    borderColor: C.ruledLine,
-  },
-
-  // ── Error ──
   error: {
     color: C.errorText,
     fontSize: 13,
     ...(isWeb && { fontFamily: 'var(--font-display)' } as any),
   },
-
-  // ── Buttons ──
-  enterBtn: {
-    width: 36,
-    height: 36,
-    borderRadius: 18,
+  submitBtn: {
+    width: '100%',
+    paddingVertical: 12,
+    borderRadius: 8,
+    backgroundColor: C.ink,
     alignItems: 'center',
-    justifyContent: 'center',
-    ...(isWeb && {
-      cursor: 'pointer',
-      transition: 'background-color 150ms ease',
-    } as any),
+    ...(isWeb && { cursor: 'pointer', transition: 'opacity 150ms ease' } as any),
   },
-  enterBtnPressed: {
-    backgroundColor: C.vellum,
+  submitBtnPressed: {
+    opacity: 0.8,
   },
-  enterArrow: {
-    fontSize: 22,
+  submitText: {
+    fontSize: 14,
+    fontWeight: '400',
+    color: C.parchment,
+    ...(isWeb && { fontFamily: 'var(--font-display)' } as any),
+  },
+  dividerText: {
+    fontSize: 11,
     ...(isWeb && { fontFamily: 'var(--font-mono)' } as any),
   },
-  btnOff: {
-    opacity: 0.35,
+  googleBtn: {
+    width: '100%',
+    paddingVertical: 12,
+    borderRadius: 8,
+    borderWidth: 0.5,
+    borderColor: C.ruledLine,
+    alignItems: 'center',
+    ...(isWeb && { cursor: 'pointer', transition: 'border-color 150ms ease, background-color 150ms ease' } as any),
+  },
+  googleBtnPressed: {
+    borderColor: C.graphite,
+    backgroundColor: C.vellum,
+  },
+  googleText: {
+    fontSize: 14,
+    fontWeight: '400',
+    ...(isWeb && { fontFamily: 'var(--font-display)' } as any),
   },
   ghost: {
     paddingVertical: 4,
@@ -432,45 +311,6 @@ const styles = StyleSheet.create({
   ghostPressed: {
     backgroundColor: C.vellum,
   },
-
-  // ── Divider ──
-  dividerRow: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: 12,
-    width: '100%',
-  },
-  dividerLine: {
-    flex: 1,
-    height: 0.5,
-    backgroundColor: C.ruledLine,
-  },
-  dividerText: {
-    fontSize: 11,
-    ...(isWeb && { fontFamily: 'var(--font-mono)' } as any),
-  },
-
-  // ── Telegram ──
-  telegramBtn: {
-    width: '100%',
-    paddingVertical: 12,
-    borderRadius: 8,
-    borderWidth: 0.5,
-    borderColor: C.ruledLine,
-    alignItems: 'center',
-    ...(isWeb && { cursor: 'pointer', transition: 'border-color 150ms ease' } as any),
-  },
-  telegramBtnPressed: {
-    borderColor: C.graphite,
-    backgroundColor: C.vellum,
-  },
-  telegramText: {
-    fontSize: 14,
-    fontWeight: '400',
-    ...(isWeb && { fontFamily: 'var(--font-display)' } as any),
-  },
-
-  // ── Legal ──
   legal: {
     flexDirection: 'row',
     flexWrap: 'wrap',
