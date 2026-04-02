@@ -9,7 +9,7 @@ sudo ("we", "us", "our") operates an AI-powered personal assistant service. This
 ## 2. Information we collect
 
 ### Information you provide
-- **Phone number**: Used for account creation, authentication, and SMS communication.
+- **Email address**: Used for account creation and authentication.
 - **Messages**: The content of messages you send to and receive from the Service.
 - **Memory data**: Facts and information extracted from your conversations, stored as key-value pairs linked to your account.
 
@@ -21,7 +21,6 @@ sudo ("we", "us", "our") operates an AI-powered personal assistant service. This
 
 We use your information to:
 - Provide, maintain, and improve the Service
-- Send and receive SMS messages on your behalf
 - Extract and store memory facts to personalize responses
 - Generate AI-powered responses using your conversation history and stored memory
 - Authenticate your identity
@@ -34,9 +33,7 @@ Your messages and stored memory are sent to third-party AI providers (currently 
 ## 5. Data storage and security
 
 - Your data is stored in Supabase (hosted on AWS) with row-level security enabled.
-- Phone numbers are stored in E.164 format.
 - We use the Supabase service role key only on our backend server, never in client applications.
-- Twilio handles SMS delivery and phone verification with their own security measures.
 - We implement reasonable technical and organizational measures to protect your data, but no method of transmission or storage is 100% secure.
 
 ## 6. Data retention
@@ -51,8 +48,7 @@ Upon account deletion, we will delete your data within 30 days, except where ret
 
 We do not sell your personal information. We share data only with:
 - **AI providers** (OpenAI): To generate responses, via API with no-training configurations.
-- **Twilio**: To send and receive SMS messages and verify phone numbers.
-- **Supabase**: For data storage and real-time functionality.
+- **Supabase**: For data storage, authentication, and real-time functionality.
 - **Law enforcement**: When required by law or to protect rights and safety.
 
 ## 8. Your rights
@@ -62,8 +58,6 @@ You have the right to:
 - **Delete**: Request deletion of your memory data or entire account.
 - **Portability**: Request an export of your data.
 - **Correction**: Update or correct your information.
-- **Opt out of SMS**: Text STOP to our number at any time.
-
 To exercise these rights, use the application settings or contact us at privacy@sudo.ai.
 
 ## 9. Children's privacy
@@ -80,7 +74,7 @@ The Service is operated in the United States. If you access the Service from out
 
 ## 12. Changes to this policy
 
-We may update this Privacy Policy from time to time. We will notify you of material changes via the Service or SMS. Continued use after changes constitutes acceptance.
+We may update this Privacy Policy from time to time. We will notify you of material changes via the Service. Continued use after changes constitutes acceptance.
 
 ## 13. Contact
 

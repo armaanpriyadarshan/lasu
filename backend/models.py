@@ -3,13 +3,9 @@ from typing import Optional
 from pydantic import BaseModel
 
 
-class PhoneRequest(BaseModel):
-    phone: str  # E.164 format
-
-
-class VerifyRequest(BaseModel):
-    phone: str
-    code: str
+class MessageRequest(BaseModel):
+    user_id: str
+    content: str
 
 
 class CreateAgentRequest(BaseModel):

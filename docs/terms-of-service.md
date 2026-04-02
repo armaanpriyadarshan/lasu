@@ -8,15 +8,15 @@ By accessing or using sudo ("the Service"), you agree to be bound by these Terms
 
 ## 2. Description of service
 
-sudo is an AI-powered personal assistant that communicates via SMS and a companion application. The Service processes your messages, extracts and stores information you share, and responds on your behalf.
+sudo is an AI-powered personal assistant. The Service processes your messages, extracts and stores information you share, and responds on your behalf.
 
 ## 3. Eligibility
 
 You must be at least 18 years old and capable of forming a binding contract to use the Service. By registering, you represent that you meet these requirements.
 
-## 4. Account and phone number
+## 4. Account
 
-You register using your phone number. You are responsible for maintaining the security of your account and for all activity under it. You must provide accurate, current information and promptly update it if it changes.
+You register using your email address. You are responsible for maintaining the security of your account and for all activity under it. You must provide accurate, current information and promptly update it if it changes.
 
 ## 5. Acceptable use
 
@@ -39,34 +39,30 @@ The Service uses artificial intelligence to generate responses. AI-generated con
 
 The Service extracts and stores facts from your conversations to provide personalized responses. You can view stored memory data in the application. You may request deletion of your data at any time by contacting us.
 
-## 8. SMS and messaging
-
-By providing your phone number, you consent to receive SMS messages from the Service. Standard messaging rates from your carrier may apply. You may stop receiving messages by texting STOP at any time.
-
-## 9. Intellectual property
+## 8. Intellectual property
 
 The Service and its original content, features, and functionality are owned by sudo and are protected by applicable intellectual property laws. Your content remains yours.
 
-## 10. Termination
+## 9. Termination
 
 We may terminate or suspend your account at any time, without prior notice, for conduct that we determine violates these Terms or is harmful to the Service or other users. You may terminate your account at any time through the application.
 
-## 11. Disclaimer of warranties
+## 10. Disclaimer of warranties
 
 The Service is provided "as is" and "as available" without warranties of any kind, whether express or implied, including but not limited to implied warranties of merchantability, fitness for a particular purpose, and non-infringement.
 
-## 12. Limitation of liability
+## 11. Limitation of liability
 
 In no event shall sudo, its directors, employees, partners, agents, or affiliates be liable for any indirect, incidental, special, consequential, or punitive damages, including loss of profits, data, or other intangible losses, resulting from your use of or inability to use the Service.
 
-## 13. Changes to terms
+## 12. Changes to terms
 
-We reserve the right to modify these Terms at any time. We will notify you of material changes via the Service or SMS. Continued use after changes constitutes acceptance.
+We reserve the right to modify these Terms at any time. We will notify you of material changes via the Service. Continued use after changes constitutes acceptance.
 
-## 14. Governing law
+## 13. Governing law
 
 These Terms shall be governed by the laws of the State of California, without regard to its conflict of law provisions.
 
-## 15. Contact
+## 14. Contact
 
 For questions about these Terms, contact us at legal@sudo.ai.

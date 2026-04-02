@@ -45,7 +45,7 @@ type ActivityItem = {
 const ACTIVITY: ActivityItem[] = [
   {
     id: '1',
-    text: 'Sent morning digest to SMS',
+    text: 'Sent morning digest',
     minutesAgo: 2,
     dotColor: C.connectedText,
     badge: { label: 'delivered', bg: C.connected, text: C.connectedText },
@@ -58,7 +58,7 @@ const ACTIVITY: ActivityItem[] = [
   },
   {
     id: '3',
-    text: 'Received message from +1 (555) 234-5678',
+    text: 'Received message from user',
     minutesAgo: 4,
     dotColor: C.tide,
     badge: { label: 'inbound', bg: C.info, text: C.infoText },
@@ -86,8 +86,7 @@ const ACTIVITY: ActivityItem[] = [
 ]
 
 const CHANNELS = [
-  { name: 'SMS', color: C.connectedText },
-  { name: 'Email', color: C.connectedText },
+  { name: 'App', color: C.connectedText },
 ]
 
 // ── Components ───────────────────────────────────────────────────────
