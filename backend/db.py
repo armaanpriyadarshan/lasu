@@ -252,3 +252,62 @@ async def resolve_permission_request(request_id: str, status: str, grant_type: s
         .execute()
     )
     return res.data[0] if res.data else None
+
+
+# ── Job functions ──
+
+async def create_job(agent_id: str, job_type: str = "heartbeat", schedule_ms: int = 1800000,
+                     active_hours_start: str = None, active_hours_end: str = None) -> dict:
+    data = {
+        "agent_id": agent_id,
+        "job_type": job_type,
+        "schedule_ms": schedule_ms,
+        "next_run": "now()",
+    }
+    if active_hours_start:
+        data["active_hours_start"] = active_hours_start
+    if active_hours_end:
+        data["active_hours_end"] = active_hours_end
+    res = supabase.table("agent_jobs").insert(data).execute()
+    return res.data[0] if res.data else None
+
+
+async def get_jobs(agent_id: str) -> list:
+    res = (
+        supabase.table("agent_jobs")
+        .select("*")
+        .eq("agent_id", agent_id)
+        .order("created_at", desc=False)
+        .execute()
+    )
+    return res.data
+
+
+async def get_job(job_id: str) -> dict | None:
+    res = supabase.table("agent_jobs").select("*").eq("id", job_id).execute()
+    return res.data[0] if res.data else None
+
+
+async def update_job(job_id: str, updates: dict) -> dict | None:
+    res = supabase.table("agent_jobs").update(updates).eq("id", job_id).execute()
+    return res.data[0] if res.data else None
+
+
+async def delete_job(job_id: str) -> bool:
+    res = supabase.table("agent_jobs").delete().eq("id", job_id).execute()
+    return len(res.data) > 0
+
+
+async def get_due_jobs() -> list:
+    res = (
+        supabase.table("agent_jobs")
+        .select("*, agents!inner(id, user_id, name, system_prompt, model, is_active)")
+        .eq("enabled", True)
+        .lte("next_run", "now()")
+        .execute()
+    )
+    return [j for j in res.data if j.get("agents", {}).get("is_active", False)]
+
+
+async def mark_job_ran(job_id: str, schedule_ms: int):
+    supabase.rpc("mark_job_ran", {"job_id_param": job_id, "schedule_ms_param": schedule_ms}).execute()
