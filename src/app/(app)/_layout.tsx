@@ -42,7 +42,7 @@ export default function AppLayout() {
               sudo
             </ThemedText>
             <ThemedText style={[styles.sidebarSub, { color: C.pencil }]}>
-              YOUR AI TWIN
+              YOUR PERSONAL INTELLIGENCE
             </ThemedText>
           </View>
 

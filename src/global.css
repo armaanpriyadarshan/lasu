@@ -85,6 +85,12 @@ input:focus {
   transform: translateY(0);
   box-shadow: none;
 }
+[data-hover="darken"] {
+  transition: filter 150ms ease;
+}
+[data-hover="darken"]:hover {
+  filter: brightness(0.3) !important;
+}
 [data-hover="dim"] {
   transition: opacity 150ms ease;
 }
@@ -93,6 +99,12 @@ input:focus {
 }
 [data-hover="vellum"] {
   transition: background-color 150ms ease;
+}
+[data-hover="solid"] {
+  transition: opacity 150ms ease;
+}
+[data-hover="solid"]:hover {
+  opacity: 0.85 !important;
 }
 [data-hover="ghost"] {
   transition: border-color 150ms ease, background-color 150ms ease;

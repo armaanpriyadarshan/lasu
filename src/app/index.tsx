@@ -1,4 +1,4 @@
-import { useEffect, useRef, useState } from 'react'
+import React, { useEffect, useRef, useState } from 'react'
 import {
   ActivityIndicator,
   Platform,
@@ -94,7 +94,7 @@ export default function StartPage() {
             <View style={styles.card}>
               <TextInput
                 style={styles.input}
-                placeholder="email"
+                placeholder="EMAIL"
                 placeholderTextColor={C.pencil}
                 keyboardType="email-address"
                 autoCapitalize="none"
@@ -107,7 +107,7 @@ export default function StartPage() {
               <TextInput
                 ref={passwordRef}
                 style={styles.input}
-                placeholder="password"
+                placeholder="PASSWORD"
                 placeholderTextColor={C.pencil}
                 secureTextEntry
                 returnKeyType="go"
@@ -123,7 +123,7 @@ export default function StartPage() {
               <Pressable
                 onPress={handleSubmit}
                 disabled={loading}
-                dataSet={{ hover: 'ghost' }}
+                dataSet={{ hover: 'solid' }}
                 style={({ pressed }) => [
                   styles.submitBtn,
                   pressed && styles.submitBtnPressed,
@@ -132,8 +132,8 @@ export default function StartPage() {
                 {loading ? (
                   <ActivityIndicator color={C.pencil} size="small" />
                 ) : (
-                  <ThemedText style={[styles.submitText, { color: C.fadedInk }]}>
-                    {mode === 'signup' ? 'sign up' : 'sign in'}
+                  <ThemedText style={[styles.submitText, { color: C.parchment }]}>
+                    {mode === 'signup' ? 'Sign Up' : 'Sign In'}
                   </ThemedText>
                 )}
               </Pressable>
@@ -148,9 +148,15 @@ export default function StartPage() {
                   pressed && styles.googleBtnPressed,
                 ]}
               >
-                <ThemedText style={[styles.googleText, { color: C.fadedInk }]}>
-                  continue with google
-                </ThemedText>
+                <View style={styles.googleInner}>
+                  {isWeb && React.createElement('div', {
+                    style: { width: 18, height: 18, flexShrink: 0 },
+                    dangerouslySetInnerHTML: { __html: '<svg viewBox="0 0 24 24" width="18" height="18" xmlns="http://www.w3.org/2000/svg"><path d="M22.56 12.25c0-.78-.07-1.53-.2-2.25H12v4.26h5.92a5.06 5.06 0 01-2.2 3.32v2.77h3.57c2.08-1.92 3.28-4.74 3.28-8.1z" fill="#4285F4"/><path d="M12 23c2.97 0 5.46-.98 7.28-2.66l-3.57-2.77c-.98.66-2.23 1.06-3.71 1.06-2.86 0-5.29-1.93-6.16-4.53H2.18v2.84C3.99 20.53 7.7 23 12 23z" fill="#34A853"/><path d="M5.84 14.09c-.22-.66-.35-1.36-.35-2.09s.13-1.43.35-2.09V7.07H2.18A11.96 11.96 0 001 12c0 1.94.46 3.77 1.18 5.41l3.66-2.84z" fill="#FBBC05"/><path d="M12 5.38c1.62 0 3.06.56 4.21 1.64l3.15-3.15C17.45 2.09 14.97 1 12 1 7.7 1 3.99 3.47 2.18 7.07l3.66 2.84c.87-2.6 3.3-4.53 6.16-4.53z" fill="#EA4335"/></svg>' },
+                  })}
+                  <ThemedText style={[styles.googleText, { color: C.fadedInk }]}>
+                    Continue with Google
+                  </ThemedText>
+                </View>
               </Pressable>
 
               <Pressable
@@ -158,40 +164,17 @@ export default function StartPage() {
                   setMode(mode === 'signin' ? 'signup' : 'signin')
                   setError('')
                 }}
+                dataSet={{ hover: 'darken' }}
                 style={({ pressed }) => [
                   styles.ghost,
                   pressed && styles.ghostPressed,
                 ]}
               >
                 <ThemedText type="small" style={{ color: C.pencil }}>
-                  {mode === 'signin' ? "don't have an account? sign up" : 'already have an account? sign in'}
+                  {mode === 'signin' ? "Don't have an account? Sign up" : 'Already have an account? Sign in'}
                 </ThemedText>
               </Pressable>
 
-              <View style={styles.legal}>
-                <ThemedText style={[styles.legalText, { color: C.ruledLine }]}>
-                  By continuing, you agree to our{' '}
-                </ThemedText>
-                <Pressable
-                  onPress={() => router.push('/terms')}
-                  style={({ pressed }) => pressed && { opacity: 0.5 }}
-                >
-                  <ThemedText style={[styles.legalLink, { color: C.pencil }]}>
-                    terms of service
-                  </ThemedText>
-                </Pressable>
-                <ThemedText style={[styles.legalText, { color: C.ruledLine }]}>
-                  {' '}and{' '}
-                </ThemedText>
-                <Pressable
-                  onPress={() => router.push('/privacy')}
-                  style={({ pressed }) => pressed && { opacity: 0.5 }}
-                >
-                  <ThemedText style={[styles.legalLink, { color: C.pencil }]}>
-                    privacy policy
-                  </ThemedText>
-                </Pressable>
-              </View>
             </View>
           </Animated.View>
         </View>
@@ -219,7 +202,7 @@ const styles = StyleSheet.create({
   },
   header: {
     alignItems: 'center',
-    marginBottom: 48,
+    marginBottom: 36,
   },
   title: {
     fontSize: 72,
@@ -232,7 +215,7 @@ const styles = StyleSheet.create({
     fontSize: 12,
     fontWeight: '400',
     textAlign: 'center',
-    marginTop: 32,
+    marginTop: 20,
     textTransform: 'uppercase',
     ...(isWeb && { fontFamily: 'var(--font-mono)' } as any),
   },
@@ -242,20 +225,21 @@ const styles = StyleSheet.create({
   },
   card: {
     width: '100%',
-    gap: 16,
+    gap: 12,
     alignItems: 'center',
   },
   input: {
     width: '100%',
-    fontSize: 16,
+    fontSize: 11,
     color: C.ink,
     fontWeight: '400',
+    letterSpacing: 1,
     borderBottomWidth: 1,
     borderBottomColor: C.ruledLine,
     paddingBottom: 6,
     ...(isWeb && {
       outlineStyle: 'none',
-      fontFamily: 'var(--font-display)',
+      fontFamily: 'var(--font-mono)',
     } as any),
   },
   error: {
@@ -296,6 +280,11 @@ const styles = StyleSheet.create({
   googleBtnPressed: {
     borderColor: C.graphite,
     backgroundColor: C.vellum,
+  },
+  googleInner: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 10,
   },
   googleText: {
     fontSize: 14,
