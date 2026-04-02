@@ -185,20 +185,26 @@ async def run_agent(user_id: str, user_message: str) -> str:
     return response.choices[0].message.content
 
 
-HEARTBEAT_PROMPT = """You are checking in on behalf of this user. Review what you know about them and any recent context.
+HEARTBEAT_PROMPT = """You are waking up on your regular heartbeat cycle. Review what you know about this user, their standing instructions, and recent conversation context.
 
-If you have something useful to proactively share — a reminder, a follow-up, a suggestion, or an observation — respond with it concisely.
+If the user has asked you to do something on a recurring basis (e.g., "send an email every 30 minutes", "check my calendar daily"), DO IT NOW using your tools. This is your chance to execute recurring tasks.
 
-If there's nothing worth mentioning right now, respond with exactly: HEARTBEAT_OK
+If you have something useful to proactively share — a reminder, a follow-up, or an observation — respond with it concisely.
 
-Do not make up tasks or fabricate urgency. Only speak if you have something genuinely useful to say."""
+If there are no standing tasks and nothing worth mentioning, respond with exactly: HEARTBEAT_OK
+
+Do not make up tasks or fabricate urgency. But DO execute any recurring instructions the user has given you."""
 
 
 async def run_heartbeat(agent_id: str) -> str | None:
+    """Run a heartbeat with full tool access."""
+    from datetime import datetime
+
     agent = await get_agent(agent_id)
     if not agent:
         return None
 
+    owner_id = agent.get("user_id")
     system_prompt = agent.get("system_prompt") or DEFAULT_SYSTEM_PROMPT
 
     memories = await get_agent_memories(agent_id)
@@ -206,21 +212,77 @@ async def run_heartbeat(agent_id: str) -> str | None:
         memory_text = "\n".join(f"- {m['key']}: {m['value']}" for m in memories)
         system_prompt += f"\n\nThings you remember about this user:\n{memory_text}"
 
-    history = await get_agent_messages(agent_id, limit=5)
+    history = await get_agent_messages(agent_id, limit=10)
+
+    timestamp = datetime.utcnow().isoformat() + "Z"
+    heartbeat_msg = f"{HEARTBEAT_PROMPT}\n\nCurrent timestamp: {timestamp}"
 
     messages = [{"role": "system", "content": system_prompt}]
     messages.extend({"role": m["role"], "content": m["content"]} for m in history)
-    messages.append({"role": "user", "content": HEARTBEAT_PROMPT})
+    messages.append({"role": "user", "content": heartbeat_msg})
 
-    response = _get_client().chat.completions.create(
-        model=agent.get("model", "gpt-4o-mini"),
-        max_completion_tokens=300,
-        messages=messages,
-    )
+    tools = get_all_tools()
 
-    reply = response.choices[0].message.content.strip()
+    # Function calling loop (same as run_agent_chat but lighter)
+    for _ in range(3):
+        response = _get_client().chat.completions.create(
+            model=agent.get("model", "gpt-4o-mini"),
+            max_completion_tokens=500,
+            messages=messages,
+            tools=tools if tools else None,
+        )
 
-    if reply == "HEARTBEAT_OK" or not reply:
-        return None
+        choice = response.choices[0]
 
-    return reply
+        if choice.finish_reason != "tool_calls" or not choice.message.tool_calls:
+            reply = (choice.message.content or "").strip()
+            if reply == "HEARTBEAT_OK" or not reply:
+                return None
+            return reply
+
+        messages.append(choice.message)
+
+        for tool_call in choice.message.tool_calls:
+            tool_name = tool_call.function.name
+            tool_args = json.loads(tool_call.function.arguments)
+
+            required_perm = get_tool_permission(tool_name)
+            if required_perm:
+                perm_check = await check_permission(agent_id, required_perm,
+                    f"Heartbeat: agent using {tool_name}")
+                if not perm_check["allowed"]:
+                    messages.append({
+                        "role": "tool",
+                        "tool_call_id": tool_call.id,
+                        "content": f"Permission denied: {required_perm} access not granted.",
+                    })
+                    continue
+
+            tool = get_tool(tool_name)
+            if not tool:
+                messages.append({
+                    "role": "tool",
+                    "tool_call_id": tool_call.id,
+                    "content": f"Unknown tool: {tool_name}",
+                })
+                continue
+
+            try:
+                import inspect
+                sig = inspect.signature(tool["fn"])
+                if "user_id" in sig.parameters and "user_id" not in tool_args:
+                    tool_args["user_id"] = owner_id
+                result = await tool["fn"](**tool_args)
+            except Exception as e:
+                result = f"Tool error: {e}"
+
+            messages.append({
+                "role": "tool",
+                "tool_call_id": tool_call.id,
+                "content": str(result),
+            })
+
+            if required_perm:
+                await consume_permission(agent_id, required_perm)
+
+    return None
