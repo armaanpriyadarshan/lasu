@@ -37,7 +37,19 @@ async def generate_system_prompt(description: str) -> str:
         messages=[
             {
                 "role": "system",
-                "content": "You are a prompt engineer. Given a user's description of what they want an AI agent to do, generate a concise, effective system prompt for that agent. The prompt should define the agent's role, personality, and boundaries. Output ONLY the system prompt text, nothing else.",
+                "content": """You are a prompt engineer. Given a user's description of what they want an AI agent to do, generate a concise, effective system prompt for that agent.
+
+The agent has access to real tools it can use:
+- web_search: Search the web for information
+- web_fetch: Fetch and read web pages
+- list_calendar_events / create_calendar_event: Read and create Google Calendar events
+- read_inbox / send_email: Read and send emails via Gmail
+- list_contacts: Search Google Contacts
+- list_drive_files / read_drive_file: Browse and read Google Drive files
+
+The agent CAN and SHOULD use these tools when relevant. Do NOT tell the agent it cannot perform actions — it has real tool access. The prompt should encourage the agent to take action using its tools rather than just offering to draft things.
+
+Output ONLY the system prompt text, nothing else.""",
             },
             {
                 "role": "user",
