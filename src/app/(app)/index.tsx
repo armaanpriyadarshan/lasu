@@ -13,7 +13,7 @@ import { useFocusEffect, useRouter } from 'expo-router'
 import { ThemedText } from '@/components/themed-text'
 import { Colors } from '@/constants/theme'
 import { useAuth } from '@/lib/auth'
-import { listAgents, type Agent } from '@/lib/api'
+import { getDashboard, listAgents, type Agent, type DashboardStats } from '@/lib/api'
 
 const C = Colors.light
 const isWeb = Platform.OS === 'web'
@@ -26,68 +26,13 @@ function getGreeting() {
   return 'Good evening'
 }
 
-function relativeTime(minutesAgo: number) {
-  if (minutesAgo < 1) return 'just now'
-  if (minutesAgo < 60) return `${minutesAgo}m ago`
-  return `${Math.floor(minutesAgo / 60)}h ago`
+function timeAgo(iso: string) {
+  const diff = Math.floor((Date.now() - new Date(iso).getTime()) / 60000)
+  if (diff < 1) return 'just now'
+  if (diff < 60) return `${diff}m ago`
+  if (diff < 1440) return `${Math.floor(diff / 60)}h ago`
+  return `${Math.floor(diff / 1440)}d ago`
 }
-
-// ── Mock data ────────────────────────────────────────────────────────
-
-type ActivityItem = {
-  id: string
-  text: string
-  minutesAgo: number
-  dotColor: string
-  badge?: { label: string; bg: string; text: string }
-}
-
-const ACTIVITY: ActivityItem[] = [
-  {
-    id: '1',
-    text: 'Sent morning digest',
-    minutesAgo: 2,
-    dotColor: C.connectedText,
-    badge: { label: 'delivered', bg: C.connected, text: C.connectedText },
-  },
-  {
-    id: '2',
-    text: 'Extracted 3 new memory facts from conversation',
-    minutesAgo: 3,
-    dotColor: C.connectedText,
-  },
-  {
-    id: '3',
-    text: 'Received message from user',
-    minutesAgo: 4,
-    dotColor: C.tide,
-    badge: { label: 'inbound', bg: C.info, text: C.infoText },
-  },
-  {
-    id: '4',
-    text: 'Scheduled daily check-in for 6:00 PM',
-    minutesAgo: 9,
-    dotColor: C.tide,
-    badge: { label: 'scheduled', bg: C.info, text: C.infoText },
-  },
-  {
-    id: '5',
-    text: 'Calendar sync completed — 4 events imported',
-    minutesAgo: 34,
-    dotColor: C.connectedText,
-  },
-  {
-    id: '6',
-    text: 'Awaiting approval: draft reply to Sarah',
-    minutesAgo: 48,
-    dotColor: C.waxSeal,
-    badge: { label: 'awaiting approval', bg: C.warning, text: C.warningText },
-  },
-]
-
-const CHANNELS = [
-  { name: 'App', color: C.connectedText },
-]
 
 // ── Components ───────────────────────────────────────────────────────
 function StatCard({ label, value, subtitle, positive, index }: {
@@ -96,7 +41,6 @@ function StatCard({ label, value, subtitle, positive, index }: {
   return (
     <Animated.View
       entering={FadeInDown.duration(300).delay(100 + index * 80)}
-
       dataSet={{ hover: 'card' }}
       style={styles.statCard}
     >
@@ -109,38 +53,6 @@ function StatCard({ label, value, subtitle, positive, index }: {
   )
 }
 
-function ActivityRow({ item, index }: { item: ActivityItem; index: number }) {
-  return (
-    <Animated.View
-      entering={FadeInDown.duration(250).delay(300 + index * 60)}
-
-      dataSet={{ hover: 'card' }}
-      style={styles.activityCard}
-    >
-      <View style={styles.activityInner}>
-        <View style={[styles.activityDot, { backgroundColor: item.dotColor }]} />
-        <View style={styles.activityContent}>
-          <ThemedText style={[styles.activityText, { color: C.fadedInk }]}>
-            {item.text}
-          </ThemedText>
-          <View style={styles.activityMeta}>
-            <ThemedText style={[styles.activityTime, { color: C.pencil }]}>
-              {relativeTime(item.minutesAgo)}
-            </ThemedText>
-            {item.badge && (
-              <View style={[styles.badge, { backgroundColor: item.badge.bg }]}>
-                <ThemedText style={[styles.badgeText, { color: item.badge.text }]}>
-                  {item.badge.label}
-                </ThemedText>
-              </View>
-            )}
-          </View>
-        </View>
-      </View>
-    </Animated.View>
-  )
-}
-
 // ── Page ─────────────────────────────────────────────────────────────
 export default function DashboardScreen() {
   const { width } = useWindowDimensions()
@@ -148,12 +60,16 @@ export default function DashboardScreen() {
   const { userId } = useAuth()
   const router = useRouter()
   const [agents, setAgents] = useState<Agent[]>([])
+  const [stats, setStats] = useState<DashboardStats | null>(null)
 
   useFocusEffect(
     useCallback(() => {
       if (!userId) return
       listAgents(userId)
         .then(({ agents }) => setAgents(agents))
+        .catch(() => {})
+      getDashboard(userId)
+        .then(setStats)
         .catch(() => {})
     }, [userId])
   )
@@ -169,9 +85,9 @@ export default function DashboardScreen() {
           {getGreeting()}
         </ThemedText>
         <View style={styles.statusLine}>
-          <View style={styles.statusDot} />
+          <View style={[styles.statusDot, { backgroundColor: agents.length > 0 ? C.connectedText : C.pencil }]} />
           <ThemedText style={[styles.statusText, { color: C.pencil }]}>
-            Sailing smoothly
+            {agents.length > 0 ? `${agents.length} agent${agents.length > 1 ? 's' : ''} active` : 'No agents yet'}
           </ThemedText>
         </View>
       </Animated.View>
@@ -179,9 +95,24 @@ export default function DashboardScreen() {
       {/* Stat cards */}
       <View style={[styles.statsGrid, isDesktop && styles.statsGridDesk]}>
         {[
-          { label: 'Messages today', value: '—', subtitle: 'Coming soon', positive: false },
-          { label: 'Active agents', value: String(agents.length), subtitle: agents.length === 0 ? 'Create your first' : 'Running', positive: agents.length > 0 },
-          { label: 'Skills running', value: '0', subtitle: 'Coming soon', positive: false },
+          {
+            label: 'Messages today',
+            value: String(stats?.messages_today ?? 0),
+            subtitle: stats?.messages_today ? 'Keep going' : 'Send your first',
+            positive: (stats?.messages_today ?? 0) > 0,
+          },
+          {
+            label: 'Active agents',
+            value: String(stats?.active_agents ?? 0),
+            subtitle: (stats?.active_agents ?? 0) === 0 ? 'Create your first' : 'Running',
+            positive: (stats?.active_agents ?? 0) > 0,
+          },
+          {
+            label: 'Memory facts',
+            value: String(stats?.total_memories ?? 0),
+            subtitle: (stats?.total_memories ?? 0) === 0 ? 'Chat to build memory' : 'Learned from you',
+            positive: (stats?.total_memories ?? 0) > 0,
+          },
         ].map((stat, i) => (
           <StatCard key={stat.label} {...stat} index={i} />
         ))}
@@ -191,47 +122,67 @@ export default function DashboardScreen() {
       <View style={styles.feedSection}>
         <Animated.View entering={FadeIn.duration(400).delay(250)}>
           <ThemedText serif style={[styles.sectionTitle, { color: C.ink }]}>
-            Today's log
+            Recent activity
           </ThemedText>
         </Animated.View>
 
         <View style={styles.feedList}>
-          {ACTIVITY.map((item, i) => (
-            <ActivityRow key={item.id} item={item} index={i} />
-          ))}
+          {stats?.activity && stats.activity.length > 0 ? (
+            stats.activity.map((item, i) => (
+              <Animated.View
+                key={item.id}
+                entering={FadeInDown.duration(250).delay(300 + i * 60)}
+                dataSet={{ hover: 'card' }}
+                style={styles.activityCard}
+              >
+                <View style={styles.activityInner}>
+                  <View style={[styles.activityDot, {
+                    backgroundColor: item.role === 'assistant' ? C.connectedText : C.tide,
+                  }]} />
+                  <View style={styles.activityContent}>
+                    <ThemedText style={[styles.activityText, { color: C.fadedInk }]}>
+                      {item.text}
+                    </ThemedText>
+                    <View style={styles.activityMeta}>
+                      <ThemedText style={[styles.activityTime, { color: C.pencil }]}>
+                        {timeAgo(item.created_at)}
+                      </ThemedText>
+                      <View style={[styles.badge, {
+                        backgroundColor: item.role === 'assistant' ? C.connected : C.info,
+                      }]}>
+                        <ThemedText style={[styles.badgeText, {
+                          color: item.role === 'assistant' ? C.connectedText : C.infoText,
+                        }]}>
+                          {item.role === 'assistant' ? 'reply' : 'you'}
+                        </ThemedText>
+                      </View>
+                    </View>
+                  </View>
+                </View>
+              </Animated.View>
+            ))
+          ) : (
+            <Animated.View entering={FadeIn.duration(400).delay(400)}>
+              <ThemedText style={[styles.emptyText, { color: C.pencil }]}>
+                No activity yet. Create an agent and start chatting.
+              </ThemedText>
+            </Animated.View>
+          )}
         </View>
       </View>
 
-      {/* Channel pills */}
-      <View style={styles.channelSection}>
-        {CHANNELS.map((ch) => (
-          <View key={ch.name} dataSet={{ hover: 'card' }} style={styles.channelPill}>
-            <View style={[styles.channelDot, { backgroundColor: ch.color }]} />
-            <ThemedText style={[styles.channelText, { color: C.fadedInk }]}>
-              {ch.name}
-            </ThemedText>
-          </View>
-        ))}
-        <Pressable
-
-          dataSet={{ hover: 'vellum' }}
-          style={({ pressed }) => [styles.channelPillAdd, pressed && { backgroundColor: C.vellum }]}
-        >
-          <ThemedText style={[styles.channelText, { color: C.pencil }]}>
-            + Add channel
-          </ThemedText>
-        </Pressable>
-      </View>
+      {/* Agent pills */}
       {agents.length > 0 && (
-        <View style={styles.channelSection}>
+        <View style={styles.agentSection}>
           {agents.map((a) => (
             <Pressable
               key={a.id}
               onPress={() => router.push(`/chat/${a.id}`)}
-              style={styles.channelPill}
+              dataSet={{ hover: 'card' }}
+              style={styles.agentPill}
             >
-              <View style={[styles.channelDot, { backgroundColor: C.tide }]} />
-              <ThemedText style={[styles.channelText, { color: C.fadedInk }]}>
+              <View style={[styles.agentDot, { backgroundColor: C.tide }]} />
+              <ThemedText style={[styles.agentText, { color: C.fadedInk }]}>
                 {a.name}
               </ThemedText>
             </Pressable>
@@ -277,7 +228,6 @@ const styles = StyleSheet.create({
     width: 6,
     height: 6,
     borderRadius: 3,
-    backgroundColor: C.connectedText,
   },
   statusText: {
     fontSize: 11,
@@ -384,15 +334,21 @@ const styles = StyleSheet.create({
     fontWeight: '500',
     ...(isWeb && { fontFamily: 'var(--font-mono)' } as any),
   },
+  emptyText: {
+    fontSize: 13,
+    textAlign: 'center',
+    paddingVertical: 24,
+    ...(isWeb && { fontFamily: 'var(--font-display)' } as any),
+  },
 
-  // ── Channels ──
-  channelSection: {
+  // ── Agent pills ──
+  agentSection: {
     flexDirection: 'row',
     flexWrap: 'wrap',
     gap: 8,
     marginTop: 4,
   },
-  channelPill: {
+  agentPill: {
     flexDirection: 'row',
     alignItems: 'center',
     gap: 8,
@@ -402,26 +358,16 @@ const styles = StyleSheet.create({
     borderRadius: 8,
     paddingVertical: 8,
     paddingHorizontal: 14,
+    ...(isWeb && { cursor: 'pointer' } as any),
   },
-  channelDot: {
+  agentDot: {
     width: 6,
     height: 6,
     borderRadius: 3,
   },
-  channelText: {
+  agentText: {
     fontSize: 12,
     fontWeight: '400',
     ...(isWeb && { fontFamily: 'var(--font-display)' } as any),
-  },
-  channelPillAdd: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    borderWidth: 0.5,
-    borderColor: C.ruledLine,
-    borderStyle: 'dashed',
-    borderRadius: 8,
-    paddingVertical: 8,
-    paddingHorizontal: 14,
-    ...(isWeb && { cursor: 'pointer' } as any),
   },
 })

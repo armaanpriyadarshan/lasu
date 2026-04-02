@@ -1,3 +1,4 @@
+import { useState } from 'react'
 import { Platform, Pressable, StyleSheet, View, useWindowDimensions } from 'react-native'
 import { Slot, usePathname, useRouter } from 'expo-router'
 import { SafeAreaView } from 'react-native-safe-area-context'
@@ -6,7 +7,6 @@ import { ThemedText } from '@/components/themed-text'
 import { SvgIcon, type IconName } from '@/components/icons'
 import { Colors } from '@/constants/theme'
 import { useAuth } from '@/lib/auth'
-import { supabase } from '@/lib/supabase'
 
 const C = Colors.light
 const isWeb = Platform.OS === 'web'
@@ -26,15 +26,15 @@ export default function AppLayout() {
   const { width } = useWindowDimensions()
   const isDesktop = width > 768
   const pathname = usePathname()
+  const [collapsed, setCollapsed] = useState(false)
 
-  const handleSignOut = () => {
-    supabase.auth.signOut().then(() => {
-      if (Platform.OS === 'web') {
-        window.location.href = '/'
-      } else {
-        router.replace('/')
-      }
-    })
+  const handleSignOut = async () => {
+    await signOut()
+    if (Platform.OS === 'web') {
+      window.location.href = '/'
+    } else {
+      router.replace('/')
+    }
   }
 
   if (loading || !userId) return null
@@ -52,15 +52,22 @@ export default function AppLayout() {
   return (
     <View style={[styles.shell, isDesktop && styles.shellDesktop]}>
       {isDesktop && (
-        <View style={styles.sidebar}>
-          {/* Logo */}
+        <View style={[styles.sidebar, collapsed && styles.sidebarCollapsed]}>
+          {/* Logo + collapse toggle */}
           <View style={styles.sidebarTop}>
-            <ThemedText serif style={[styles.sidebarLogo, { color: C.ink }]}>
-              sudo
-            </ThemedText>
-            <ThemedText style={[styles.sidebarSub, { color: C.pencil }]}>
-              YOUR PERSONAL INTELLIGENCE
-            </ThemedText>
+            <Pressable
+              onPress={() => setCollapsed(!collapsed)}
+              style={styles.collapseRow}
+            >
+              <ThemedText serif style={[styles.sidebarLogo, { color: C.ink }]}>
+                {collapsed ? 's' : 'sudo'}
+              </ThemedText>
+            </Pressable>
+            {!collapsed && (
+              <ThemedText style={[styles.sidebarSub, { color: C.pencil }]}>
+                YOUR PERSONAL INTELLIGENCE
+              </ThemedText>
+            )}
           </View>
 
           {/* Nav */}
@@ -77,20 +84,23 @@ export default function AppLayout() {
                   dataSet={!active ? { hover: 'vellum' } : undefined}
                   style={({ pressed }) => [
                     styles.navItem,
+                    collapsed && styles.navItemCollapsed,
                     active && styles.navItemActive,
                     pressed && !active && styles.navItemHover,
                   ]}
                 >
                   <SvgIcon name={item.icon} color={active ? C.ink : C.graphite} />
-                  <ThemedText
-                    style={[
-                      styles.navText,
-                      { color: active ? C.ink : C.graphite },
-                      active && styles.navTextActive,
-                    ]}
-                  >
-                    {item.label}
-                  </ThemedText>
+                  {!collapsed && (
+                    <ThemedText
+                      style={[
+                        styles.navText,
+                        { color: active ? C.ink : C.graphite },
+                        active && styles.navTextActive,
+                      ]}
+                    >
+                      {item.label}
+                    </ThemedText>
+                  )}
                 </Pressable>
               )
             })}
@@ -99,23 +109,27 @@ export default function AppLayout() {
           {/* User */}
           <View style={styles.sidebarBottom}>
             <View style={styles.userDivider} />
-            <View style={styles.userSection}>
+            <View style={[styles.userSection, collapsed && styles.userSectionCollapsed]}>
               <View style={styles.userAvatar}>
                 <ThemedText style={[styles.userInitial, { color: C.pencil }]}>{userInitial}</ThemedText>
               </View>
-              <View style={styles.userInfo}>
-                <ThemedText style={[styles.userName, { color: C.fadedInk }]} numberOfLines={1}>
-                  {userEmail}
-                </ThemedText>
-                <ThemedText style={[styles.userPlan, { color: C.pencil }]}>free tier</ThemedText>
-              </View>
-              <Pressable
-                onPress={handleSignOut}
-                dataSet={{ hover: 'dim' }}
-                style={({ pressed }) => [styles.logoutBtn, pressed && { opacity: 0.5 }]}
-              >
-                <SvgIcon name="logout" />
-              </Pressable>
+              {!collapsed && (
+                <View style={styles.userInfo}>
+                  <ThemedText style={[styles.userName, { color: C.fadedInk }]} numberOfLines={1}>
+                    {userEmail}
+                  </ThemedText>
+                  <ThemedText style={[styles.userPlan, { color: C.pencil }]}>free tier</ThemedText>
+                </View>
+              )}
+              {!collapsed && (
+                <Pressable
+                  onPress={handleSignOut}
+                  dataSet={{ hover: 'dim' }}
+                  style={({ pressed }) => [styles.logoutBtn, pressed && { opacity: 0.5 }]}
+                >
+                  <SvgIcon name="logout" />
+                </Pressable>
+              )}
             </View>
           </View>
         </View>
@@ -170,15 +184,26 @@ const styles = StyleSheet.create({
     flexDirection: 'row',
   },
   sidebar: {
-    width: 200,
+    width: 240,
     backgroundColor: C.agedPaper,
     paddingVertical: 24,
     paddingHorizontal: 16,
     justifyContent: 'space-between',
     ...(isWeb && {
-      borderRightWidth: 0.5,
-      borderRightColor: C.ruledLine,
+      transition: 'width 200ms ease',
+      overflow: 'hidden',
     } as any),
+  },
+  sidebarCollapsed: {
+    width: 64,
+    paddingHorizontal: 12,
+    alignItems: 'center',
+  },
+  collapseRow: {
+    borderRadius: 8,
+    paddingVertical: 4,
+    paddingHorizontal: 4,
+    ...(isWeb && { cursor: 'pointer' } as any),
   },
   sidebarTop: {
     gap: 2,
@@ -209,6 +234,12 @@ const styles = StyleSheet.create({
       transition: 'background-color 150ms ease',
     } as any),
   },
+  navItemCollapsed: {
+    justifyContent: 'center',
+    paddingHorizontal: 0,
+    width: 40,
+    height: 40,
+  },
   navItemActive: {
     backgroundColor: C.vellum,
   },
@@ -233,6 +264,9 @@ const styles = StyleSheet.create({
     flexDirection: 'row',
     alignItems: 'center',
     gap: 10,
+  },
+  userSectionCollapsed: {
+    justifyContent: 'center',
   },
   userInfo: {
     flex: 1,

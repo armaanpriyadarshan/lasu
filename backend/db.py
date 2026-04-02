@@ -1,4 +1,5 @@
 import os
+from datetime import datetime, timezone
 from supabase import create_client, Client
 from dotenv import load_dotenv
 
@@ -36,6 +37,77 @@ async def save_message(user_id: str, role: str, content: str):
         "role": role,
         "content": content
     }).execute()
+
+
+async def get_dashboard_stats(user_id: str) -> dict:
+    today = datetime.now(timezone.utc).strftime("%Y-%m-%dT00:00:00+00:00")
+
+    # Messages today
+    msg_res = (
+        supabase.table("messages")
+        .select("id", count="exact")
+        .eq("user_id", user_id)
+        .gte("created_at", today)
+        .execute()
+    )
+    messages_today = msg_res.count or 0
+
+    # Active agents
+    agent_res = (
+        supabase.table("agents")
+        .select("id", count="exact")
+        .eq("user_id", user_id)
+        .eq("is_active", True)
+        .execute()
+    )
+    active_agents = agent_res.count or 0
+
+    # Total memories across all agents
+    agent_ids_res = supabase.table("agents").select("id").eq("user_id", user_id).eq("is_active", True).execute()
+    agent_ids = [a["id"] for a in agent_ids_res.data]
+    total_memories = 0
+    if agent_ids:
+        mem_res = (
+            supabase.table("agent_memory")
+            .select("id", count="exact")
+            .in_("agent_id", agent_ids)
+            .execute()
+        )
+        total_memories = mem_res.count or 0
+
+    # Recent activity: last 10 messages across all agents
+    activity_res = (
+        supabase.table("messages")
+        .select("id, role, content, created_at, agent_id")
+        .eq("user_id", user_id)
+        .order("created_at", desc=True)
+        .limit(10)
+        .execute()
+    )
+
+    # Map agent_id to agent name
+    agent_names = {}
+    if agent_ids:
+        names_res = supabase.table("agents").select("id, name").in_("id", agent_ids).execute()
+        agent_names = {a["id"]: a["name"] for a in names_res.data}
+
+    activity = []
+    for msg in activity_res.data:
+        agent_name = agent_names.get(msg.get("agent_id"), "sudo")
+        activity.append({
+            "id": msg["id"],
+            "text": f"{agent_name}: {msg['content'][:80]}" if msg["role"] == "assistant" else msg["content"][:80],
+            "role": msg["role"],
+            "created_at": msg["created_at"],
+            "agent_name": agent_name,
+        })
+
+    return {
+        "messages_today": messages_today,
+        "active_agents": active_agents,
+        "total_memories": total_memories,
+        "activity": activity,
+    }
 
 
 # ── Agent functions ──

@@ -1,4 +1,4 @@
-import { useCallback, useState } from 'react'
+import { useCallback, useEffect, useState } from 'react'
 import {
   ActivityIndicator,
   Platform,
@@ -15,7 +15,7 @@ import Animated, { FadeIn, FadeInDown } from 'react-native-reanimated'
 import { ThemedText } from '@/components/themed-text'
 import { Colors } from '@/constants/theme'
 import { useAuth } from '@/lib/auth'
-import { listAgents, createAgent, type Agent } from '@/lib/api'
+import { listAgents, createAgent, deleteAgent, type Agent } from '@/lib/api'
 
 const C = Colors.light
 const isWeb = Platform.OS === 'web'
@@ -33,6 +33,15 @@ export default function AgentsScreen() {
   const [description, setDescription] = useState('')
   const [creating, setCreating] = useState(false)
   const [error, setError] = useState('')
+  const [deleting, setDeleting] = useState<string | null>(null)
+  const [menuOpen, setMenuOpen] = useState<string | null>(null)
+
+  useEffect(() => {
+    if (!menuOpen || Platform.OS !== 'web') return
+    const handler = () => setMenuOpen(null)
+    document.addEventListener('click', handler)
+    return () => document.removeEventListener('click', handler)
+  }, [menuOpen])
 
   useFocusEffect(
     useCallback(() => {
@@ -44,6 +53,24 @@ export default function AgentsScreen() {
         .finally(() => setLoading(false))
     }, [userId])
   )
+
+  const refresh = () => {
+    if (!userId) return
+    listAgents(userId)
+      .then(({ agents }) => setAgents(agents))
+      .catch(() => {})
+  }
+
+  const handleDelete = async (agentId: string) => {
+    setDeleting(agentId)
+    try {
+      await deleteAgent(agentId)
+      setAgents((prev) => prev.filter((a) => a.id !== agentId))
+    } catch {
+    } finally {
+      setDeleting(null)
+    }
+  }
 
   const handleCreate = async () => {
     if (!userId || !name.trim() || !description.trim()) return
@@ -148,14 +175,15 @@ export default function AgentsScreen() {
       ) : (
         <View style={[styles.agentGrid, isDesktop && styles.agentGridDesk]}>
           {agents.map((agent, i) => (
-            <Pressable
+            <Animated.View
               key={agent.id}
-              onPress={() => router.push(`/chat/${agent.id}`)}
-              style={({ pressed }) => [pressed && { opacity: 0.8 }]}
+              entering={FadeInDown.duration(300).delay(i * 80)}
+              dataSet={{ hover: 'border' }}
+              style={styles.agentCard}
             >
-              <Animated.View
-                entering={FadeInDown.duration(300).delay(i * 80)}
-                style={styles.agentCard}
+              <Pressable
+                onPress={() => { if (!menuOpen) router.push(`/chat/${agent.id}`) }}
+                style={styles.agentCardInner}
               >
                 <View style={styles.agentAvatar}>
                   <ThemedText style={[styles.agentInitial, { color: C.white }]}>
@@ -173,8 +201,48 @@ export default function AgentsScreen() {
                     {agent.description}
                   </ThemedText>
                 </View>
-              </Animated.View>
-            </Pressable>
+              </Pressable>
+                <View style={styles.menuWrapper}>
+                  <Pressable
+                    onPress={(e) => {
+                      e.stopPropagation()
+                      setMenuOpen(menuOpen === agent.id ? null : agent.id)
+                    }}
+                    dataSet={{ hover: 'menuTrigger' }}
+                    style={styles.menuBtn}
+                  >
+                    <ThemedText style={[styles.menuDots, { color: C.pencil }]}>⋮</ThemedText>
+                  </Pressable>
+                  <View
+                    style={[
+                      styles.menuDropdown,
+                      {
+                        opacity: menuOpen === agent.id ? 1 : 0,
+                        transform: [{ translateY: menuOpen === agent.id ? 0 : -4 }],
+                        pointerEvents: menuOpen === agent.id ? 'auto' : 'none',
+                      } as any,
+                    ]}
+                  >
+                    <Pressable
+                      onPress={(e) => {
+                        e.stopPropagation()
+                        setMenuOpen(null)
+                        handleDelete(agent.id)
+                      }}
+                      disabled={deleting === agent.id}
+                      dataSet={{ hover: 'vellum' }}
+                      style={({ pressed }) => [
+                        styles.menuItem,
+                        pressed && { backgroundColor: C.vellum },
+                      ]}
+                    >
+                      <ThemedText style={[styles.menuItemText, { color: '#C53030' }]}>
+                        {deleting === agent.id ? 'Deleting...' : 'Delete'}
+                      </ThemedText>
+                    </Pressable>
+                  </View>
+                </View>
+            </Animated.View>
           ))}
         </View>
       )}
@@ -257,13 +325,17 @@ const styles = StyleSheet.create({
   agentCard: {
     flexDirection: 'row',
     alignItems: 'center',
-    gap: 14,
-    backgroundColor: C.agedPaper,
-    borderWidth: 0.5,
-    borderColor: C.ruledLine,
+    backgroundColor: C.parchment,
     borderRadius: 10,
     padding: 16,
-    ...(isWeb && { cursor: 'pointer', transition: 'border-color 150ms ease', minWidth: 280 } as any),
+    ...(isWeb && { transition: 'background-color 150ms ease', minWidth: 280 } as any),
+  },
+  agentCardInner: {
+    flex: 1,
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 14,
+    ...(isWeb && { cursor: 'pointer' } as any),
   },
   agentAvatar: {
     width: 40,
@@ -283,6 +355,51 @@ const styles = StyleSheet.create({
   agentDesc: {
     fontSize: 12,
     lineHeight: 18,
+    ...(isWeb && { fontFamily: 'var(--font-display)' } as any),
+  },
+  menuWrapper: {
+    position: 'relative',
+  },
+  menuBtn: {
+    width: 28,
+    height: 28,
+    borderRadius: 6,
+    alignItems: 'center',
+    justifyContent: 'center',
+    ...(isWeb && { cursor: 'pointer' } as any),
+  },
+  menuDots: {
+    fontSize: 16,
+    fontWeight: '700',
+    letterSpacing: 1,
+    ...(isWeb && { fontFamily: 'var(--font-mono)' } as any),
+  },
+  menuDropdown: {
+    position: 'absolute',
+    top: 32,
+    right: 0,
+    backgroundColor: C.parchment,
+    borderWidth: 0.5,
+    borderColor: C.ruledLine,
+    borderRadius: 8,
+    paddingVertical: 4,
+    minWidth: 120,
+    ...(isWeb && {
+      boxShadow: '0 4px 12px rgba(26, 26, 24, 0.1)',
+      zIndex: 10,
+      transition: 'opacity 150ms ease, transform 150ms ease',
+    } as any),
+  },
+  menuItem: {
+    paddingVertical: 8,
+    paddingHorizontal: 14,
+    borderRadius: 6,
+    marginHorizontal: 4,
+    ...(isWeb && { cursor: 'pointer' } as any),
+  },
+  menuItemText: {
+    fontSize: 13,
+    fontWeight: '400',
     ...(isWeb && { fontFamily: 'var(--font-display)' } as any),
   },
 })
