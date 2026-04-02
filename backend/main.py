@@ -259,9 +259,19 @@ async def google_auth_url(user_id: str):
 
 @app.get("/auth/google/callback")
 async def google_callback(code: str, state: str):
+    from fastapi.responses import HTMLResponse
     user_id = state
     await exchange_code(code, user_id)
-    return {"ok": True, "message": "Google account connected successfully"}
+    return HTMLResponse("""<!DOCTYPE html>
+<html><head><meta name="viewport" content="width=device-width,initial-scale=1">
+<title>sudo — connected</title>
+<style>body{display:flex;justify-content:center;align-items:center;height:100vh;margin:0;background:#F5F0E3;font-family:serif;flex-direction:column;gap:12px}
+h1{font-size:24px;color:#1A1A18;font-weight:400}p{color:#6B6860;font-size:14px}</style>
+</head><body>
+<h1>Google account connected</h1>
+<p>You can close this tab and return to sudo.</p>
+<script>setTimeout(()=>window.close(),2000)</script>
+</body></html>""")
 
 
 @app.get("/auth/google/status")
