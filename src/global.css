@@ -56,17 +56,11 @@ input:focus {
 }
 
 ::-webkit-scrollbar {
-  width: 5px;
+  width: 0px;
+  display: none;
 }
-::-webkit-scrollbar-track {
-  background: transparent;
-}
-::-webkit-scrollbar-thumb {
-  background: var(--ruled-line);
-  border-radius: 3px;
-}
-::-webkit-scrollbar-thumb:hover {
-  background: var(--pencil);
+* {
+  scrollbar-width: none;
 }
 
 /* Hover effects */

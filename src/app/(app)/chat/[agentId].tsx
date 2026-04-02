@@ -20,7 +20,7 @@ import { SvgIcon } from '@/components/icons'
 import { Colors } from '@/constants/theme'
 import { useAuth } from '@/lib/auth'
 import {
-  getAgent, getAgentMessages, chatWithAgent,
+  getAgent, getAgentMessages, chatWithAgent, chatWithAgentStream,
   getAgentMemories, deleteAgentMemory,
   getPendingRequests, grantPermissionRequest, denyPermissionRequest,
   getAgentPermissions, revokePermission,
@@ -59,32 +59,40 @@ function renderMarkdown(text: string, color: string) {
 }
 
 function TypingDots() {
-  const [dots, setDots] = useState('.')
+  const [tick, setTick] = useState(0)
   useEffect(() => {
-    const interval = setInterval(() => {
-      setDots((d) => (d.length >= 3 ? '.' : d + '.'))
-    }, 400)
+    const interval = setInterval(() => setTick((t) => t + 1), 300)
     return () => clearInterval(interval)
   }, [])
   return (
-    <View style={[typingStyles.bubble]}>
-      <ThemedText style={[typingStyles.dots, { color: C.pencil }]}>{dots}</ThemedText>
+    <View style={typingStyles.row}>
+      {[0, 1, 2].map((i) => (
+        <View
+          key={i}
+          style={[
+            typingStyles.dot,
+            { opacity: (tick % 3) === i ? 1 : 0.25 },
+          ]}
+        />
+      ))}
     </View>
   )
 }
 
 const typingStyles = StyleSheet.create({
-  bubble: {
+  row: {
+    flexDirection: 'row',
     alignSelf: 'flex-start',
-    paddingVertical: 10,
-    paddingHorizontal: 14,
+    gap: 4,
+    paddingVertical: 12,
+    paddingHorizontal: 6,
     marginBottom: 8,
   },
-  dots: {
-    fontSize: 18,
-    fontWeight: '400',
-    letterSpacing: 2,
-    ...(isWeb && { fontFamily: 'var(--font-mono)' } as any),
+  dot: {
+    width: 6,
+    height: 6,
+    borderRadius: 3,
+    backgroundColor: C.pencil,
   },
 })
 
@@ -190,34 +198,71 @@ export default function ChatScreen() {
     setInput('')
     setSending(true)
 
-    const userMsg: AgentMessage = { role: 'user', content: text, created_at: new Date().toISOString() }
-    setMessages((prev) => [...prev, userMsg])
+    setMessages((prev) => [...prev, { role: 'user', content: text, created_at: new Date().toISOString() }])
+
+    // Add placeholder for streaming reply
+    const streamIdx = { current: -1 }
+    setMessages((prev) => {
+      streamIdx.current = prev.length
+      return [...prev, { role: 'assistant', content: '', created_at: new Date().toISOString() }]
+    })
 
     try {
-      const { reply, tool_calls } = await chatWithAgent(agentId, userId, text)
-      if (tool_calls && tool_calls.length > 0) {
-        const toolSummary = tool_calls.map((tc: { tool: string; args: Record<string, unknown>; result: string }) => {
-          if (tc.result === 'permission_denied') return `[${tc.tool}] Permission needed`
-          if (tc.result.includes('not connected')) return `[${tc.tool}] Google account needed`
-          return `[${tc.tool}] Done`
-        }).join('\n')
-        setMessages((prev) => [...prev, { role: 'assistant', content: `Tools used:\n${toolSummary}`, created_at: new Date().toISOString() }])
-        // Show Google connect if any tool needs it
-        if (tool_calls.some((tc: { result: string }) => tc.result.includes('not connected') || tc.result.includes('Google account'))) {
-          setShowGoogleConnect(true)
-        }
-      }
-      const assistantMsg: AgentMessage = { role: 'assistant', content: reply, created_at: new Date().toISOString() }
-      setMessages((prev) => [...prev, assistantMsg])
-      // Show Google connect prompt if agent reply mentions it
-      if (reply.includes('Google account not connected') || reply.includes('connect your Google account') || reply.includes('Google account isn')) {
-        setShowGoogleConnect(true)
-      }
-      // Refresh memories after each turn (extraction happens server-side)
-      getAgentMemories(agentId).then(({ memories }) => setMemories(memories)).catch(() => {})
-      getPendingRequests(agentId).then(({ requests }) => setPermRequests(requests)).catch(() => {})
+      await chatWithAgentStream(
+        agentId, userId, text,
+        // onToken — append to the streaming message
+        (token) => {
+          setMessages((prev) => {
+            const updated = [...prev]
+            const idx = streamIdx.current
+            if (idx >= 0 && updated[idx]) {
+              updated[idx] = { ...updated[idx], content: updated[idx].content + token }
+            }
+            return updated
+          })
+        },
+        // onToolCalls
+        (toolCalls) => {
+          if (toolCalls.length > 0) {
+            const toolSummary = toolCalls.map((tc) => {
+              if (tc.result === 'permission_denied') return `[${tc.tool}] Permission needed`
+              if (tc.result.includes('not connected')) return `[${tc.tool}] Google account needed`
+              return `[${tc.tool}] Done`
+            }).join('\n')
+            // Insert tool summary before the streaming message
+            setMessages((prev) => {
+              const updated = [...prev]
+              updated.splice(streamIdx.current, 0, { role: 'assistant', content: `Tools used:\n${toolSummary}`, created_at: new Date().toISOString() })
+              streamIdx.current += 1
+              return updated
+            })
+            if (toolCalls.some((tc) => tc.result.includes('not connected') || tc.result.includes('Google account'))) {
+              setShowGoogleConnect(true)
+            }
+          }
+        },
+        // onDone
+        () => {
+          setMessages((prev) => {
+            const reply = prev[streamIdx.current]?.content || ''
+            if (reply.includes('Google account not connected') || reply.includes('connect your Google account')) {
+              setShowGoogleConnect(true)
+            }
+            return prev
+          })
+          getAgentMemories(agentId).then(({ memories }) => setMemories(memories)).catch(() => {})
+          getPendingRequests(agentId).then(({ requests }) => setPermRequests(requests)).catch(() => {})
+        },
+      )
     } catch {
-      setMessages((prev) => [...prev, { role: 'assistant', content: 'Something went wrong. Try again.', created_at: new Date().toISOString() }])
+      setMessages((prev) => {
+        const updated = [...prev]
+        const idx = streamIdx.current
+        if (idx >= 0 && updated[idx] && !updated[idx].content) {
+          updated[idx] = { ...updated[idx], content: 'Something went wrong. Try again.' }
+        }
+        return updated
+      })
     } finally {
       setSending(false)
     }
@@ -413,22 +458,39 @@ export default function ChatScreen() {
         <View style={styles.permBar}>
           {permRequests.map((req) => (
             <View key={req.id} style={styles.permCard}>
-              <ThemedText style={[styles.permText, { color: C.fadedInk }]}>
-                {agent?.name} needs {req.permission} access
-              </ThemedText>
-              {req.reason ? (
-                <ThemedText style={[styles.permReason, { color: C.pencil }]}>{req.reason}</ThemedText>
-              ) : null}
-              <View style={styles.permActions}>
-                <Pressable onPress={() => handleGrantPermission(req.id, 'one_time')} style={[styles.permBtn, styles.permBtnOutline]}>
-                  <ThemedText style={[styles.permBtnText, { color: C.ink }]}>Allow once</ThemedText>
-                </Pressable>
-                <Pressable onPress={() => handleGrantPermission(req.id, 'permanent')} style={[styles.permBtn, styles.permBtnFilled]}>
-                  <ThemedText style={[styles.permBtnText, { color: C.white }]}>Always allow</ThemedText>
-                </Pressable>
-                <Pressable onPress={() => handleDenyPermission(req.id)}>
-                  <ThemedText style={{ color: C.pencil, fontSize: 12 }}>Deny</ThemedText>
-                </Pressable>
+              <View style={styles.permIcon}>
+                <SvgIcon name="shield" size={16} color={C.tide} />
+              </View>
+              <View style={styles.permBody}>
+                <ThemedText style={[styles.permTitle, { color: C.ink }]}>
+                  Allow {req.permission} access?
+                </ThemedText>
+                <ThemedText style={[styles.permDesc, { color: C.pencil }]}>
+                  {req.reason || `${agent?.name} wants to use ${req.permission} tools.`}
+                </ThemedText>
+                <View style={styles.permActions}>
+                  <Pressable
+                    onPress={() => handleGrantPermission(req.id, 'permanent')}
+                    dataSet={{ hover: 'solid' }}
+                    style={styles.permBtnAllow}
+                  >
+                    <ThemedText style={[styles.permBtnText, { color: C.white }]}>Allow</ThemedText>
+                  </Pressable>
+                  <Pressable
+                    onPress={() => handleGrantPermission(req.id, 'one_time')}
+                    dataSet={{ hover: 'vellum' }}
+                    style={styles.permBtnOnce}
+                  >
+                    <ThemedText style={[styles.permBtnText, { color: C.ink }]}>Once</ThemedText>
+                  </Pressable>
+                  <Pressable
+                    onPress={() => handleDenyPermission(req.id)}
+                    dataSet={{ hover: 'darken' }}
+                    style={styles.permBtnDeny}
+                  >
+                    <ThemedText style={[styles.permBtnDenyText, { color: C.pencil }]}>Deny</ThemedText>
+                  </Pressable>
+                </View>
               </View>
             </View>
           ))}
@@ -436,24 +498,26 @@ export default function ChatScreen() {
       )}
 
       {showGoogleConnect && (
-        <View style={styles.permRequestBar}>
-          <View style={styles.permRequestCard}>
-            <ThemedText style={[styles.permRequestText, { color: C.fadedInk }]}>
-              {agent?.name} needs access to your Google account
-            </ThemedText>
-            <ThemedText style={[styles.permRequestReason, { color: C.pencil }]}>
-              Connect Google to use calendar, email, contacts, and drive tools.
-            </ThemedText>
-            <View style={styles.permRequestActions}>
-              <Pressable
-                onPress={handleConnectGoogle}
-                style={[styles.permBtn, styles.permBtnFilled]}
-              >
-                <ThemedText style={[styles.permBtnText, { color: C.white }]}>Connect Google</ThemedText>
-              </Pressable>
-              <Pressable onPress={() => setShowGoogleConnect(false)}>
-                <ThemedText style={{ color: C.pencil, fontSize: 12 }}>Dismiss</ThemedText>
-              </Pressable>
+        <View style={styles.permBar}>
+          <View style={styles.permCard}>
+            <View style={styles.permIcon}>
+              <SvgIcon name="globe" size={16} color={C.tide} />
+            </View>
+            <View style={styles.permBody}>
+              <ThemedText style={[styles.permTitle, { color: C.ink }]}>
+                Connect Google account
+              </ThemedText>
+              <ThemedText style={[styles.permDesc, { color: C.pencil }]}>
+                Required for calendar, email, contacts, and drive tools.
+              </ThemedText>
+              <View style={styles.permActions}>
+                <Pressable onPress={handleConnectGoogle} dataSet={{ hover: 'solid' }} style={styles.permBtnAllow}>
+                  <ThemedText style={[styles.permBtnText, { color: C.white }]}>Connect</ThemedText>
+                </Pressable>
+                <Pressable onPress={() => setShowGoogleConnect(false)} dataSet={{ hover: 'darken' }} style={styles.permBtnDeny}>
+                  <ThemedText style={[styles.permBtnDenyText, { color: C.pencil }]}>Dismiss</ThemedText>
+                </Pressable>
+              </View>
             </View>
           </View>
         </View>
@@ -481,11 +545,7 @@ export default function ChatScreen() {
               pressed && { opacity: 0.7 },
             ]}
           >
-            {sending ? (
-              <ActivityIndicator color={C.white} size="small" />
-            ) : (
-              <ThemedText style={[styles.sendBtnText, { color: C.white }]}>↑</ThemedText>
-            )}
+            <ThemedText style={[styles.sendBtnText, { color: C.white }]}>↑</ThemedText>
           </Pressable>
         </View>
       </View>
@@ -622,8 +682,6 @@ const styles = StyleSheet.create({
     alignItems: 'center',
     justifyContent: 'space-between',
     paddingVertical: 8,
-    borderBottomWidth: 0.5,
-    borderBottomColor: C.ruledLine,
   },
   panelItemContent: { flex: 1, gap: 2 },
   panelKey: {
@@ -673,49 +731,73 @@ const styles = StyleSheet.create({
 
   // ── Permission requests ──
   permBar: {
-    padding: 12,
+    paddingHorizontal: 16,
+    paddingVertical: 8,
     gap: 8,
   },
   permCard: {
+    flexDirection: 'row',
     backgroundColor: C.agedPaper,
-    borderWidth: 0.5,
-    borderColor: C.ruledLine,
-    borderRadius: 10,
+    borderRadius: 12,
     padding: 14,
-    gap: 8,
+    gap: 12,
   },
-  permText: {
+  permIcon: {
+    width: 32,
+    height: 32,
+    borderRadius: 8,
+    backgroundColor: C.parchment,
+    alignItems: 'center',
+    justifyContent: 'center',
+    marginTop: 2,
+  },
+  permBody: {
+    flex: 1,
+    gap: 4,
+  },
+  permTitle: {
     fontSize: 13,
     fontWeight: '500',
     ...(isWeb && { fontFamily: 'var(--font-display)' } as any),
   },
-  permReason: {
+  permDesc: {
     fontSize: 12,
+    lineHeight: 18,
     ...(isWeb && { fontFamily: 'var(--font-display)' } as any),
   },
   permActions: {
     flexDirection: 'row',
     alignItems: 'center',
-    gap: 10,
-    marginTop: 4,
+    gap: 8,
+    marginTop: 8,
   },
-  permBtn: {
-    paddingVertical: 7,
+  permBtnAllow: {
+    backgroundColor: C.ink,
+    paddingVertical: 6,
     paddingHorizontal: 14,
-    borderRadius: 7,
+    borderRadius: 6,
     ...(isWeb && { cursor: 'pointer' } as any),
   },
-  permBtnOutline: {
-    borderWidth: 0.5,
-    borderColor: C.ruledLine,
+  permBtnOnce: {
     backgroundColor: C.parchment,
+    paddingVertical: 6,
+    paddingHorizontal: 14,
+    borderRadius: 6,
+    ...(isWeb && { cursor: 'pointer' } as any),
   },
-  permBtnFilled: {
-    backgroundColor: C.ink,
+  permBtnDeny: {
+    paddingVertical: 6,
+    paddingHorizontal: 8,
+    ...(isWeb && { cursor: 'pointer' } as any),
   },
   permBtnText: {
     fontSize: 12,
     fontWeight: '500',
+    ...(isWeb && { fontFamily: 'var(--font-display)' } as any),
+  },
+  permBtnDenyText: {
+    fontSize: 11,
+    fontWeight: '400',
     ...(isWeb && { fontFamily: 'var(--font-display)' } as any),
   },
 

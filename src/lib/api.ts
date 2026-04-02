@@ -1,6 +1,6 @@
 import { supabase } from './supabase'
 
-export const API_URL = __DEV__ ? 'http://localhost:8001' : 'https://your-railway-url.railway.app'
+export const API_URL = __DEV__ ? 'http://localhost:8000' : 'https://your-railway-url.railway.app'
 
 async function authFetch(url: string, opts: RequestInit = {}): Promise<Response> {
   const { data: { session } } = await supabase.auth.getSession()
@@ -118,6 +118,47 @@ export async function chatWithAgent(agentId: string, userId: string, message: st
   })
   if (!res.ok) throw new Error('Failed to send message')
   return res.json() as Promise<{ reply: string; tool_calls: Array<{ tool: string; args: Record<string, unknown>; result: string }>; permission_requests: unknown[] }>
+}
+
+export async function chatWithAgentStream(
+  agentId: string,
+  userId: string,
+  message: string,
+  onToken: (token: string) => void,
+  onToolCalls?: (calls: Array<{ tool: string; args: Record<string, unknown>; result: string }>) => void,
+  onDone?: (data: { tool_calls: unknown[]; permission_requests: unknown[] }) => void,
+) {
+  const res = await authFetch(`${API_URL}/agents/${agentId}/chat/stream`, {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({ user_id: userId, message }),
+  })
+  if (!res.ok) throw new Error('Failed to send message')
+
+  const reader = res.body?.getReader()
+  if (!reader) throw new Error('No stream')
+
+  const decoder = new TextDecoder()
+  let buffer = ''
+
+  while (true) {
+    const { done, value } = await reader.read()
+    if (done) break
+
+    buffer += decoder.decode(value, { stream: true })
+    const lines = buffer.split('\n')
+    buffer = lines.pop() || ''
+
+    for (const line of lines) {
+      if (!line.startsWith('data: ')) continue
+      try {
+        const event = JSON.parse(line.slice(6))
+        if (event.type === 'token') onToken(event.data)
+        else if (event.type === 'tool_calls') onToolCalls?.(event.data)
+        else if (event.type === 'done') onDone?.(event.data)
+      } catch {}
+    }
+  }
 }
 
 export async function getAgentMessages(agentId: string, limit = 50) {

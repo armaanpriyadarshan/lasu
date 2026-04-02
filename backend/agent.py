@@ -166,6 +166,100 @@ async def run_agent_chat(agent_id: str, user_message: str, user_id: str = None) 
     }
 
 
+async def stream_agent_reply(agent_id: str, user_message: str, user_id: str = None):
+    """Run tool calls non-streamed, then stream the final text reply."""
+    import inspect
+
+    agent = await get_agent(agent_id)
+    if not agent:
+        yield {"type": "token", "data": "Agent not found."}
+        yield {"type": "done", "data": {"tool_calls": [], "permission_requests": []}}
+        return
+
+    owner_id = user_id or agent.get("user_id")
+    system_prompt = agent.get("system_prompt") or DEFAULT_SYSTEM_PROMPT
+    model = agent.get("model", "gpt-5.4")
+
+    memories = await get_agent_memories(agent_id)
+    if memories:
+        memory_text = "\n".join(f"- {m['key']}: {m['value']}" for m in memories)
+        system_prompt += f"\n\nThings you remember about this user:\n{memory_text}"
+
+    history = await get_agent_messages(agent_id, limit=20)
+    messages = [{"role": "system", "content": system_prompt}]
+    messages.extend({"role": m["role"], "content": m["content"]} for m in history)
+    messages.append({"role": "user", "content": user_message})
+
+    tools = get_all_tools()
+    tool_calls_log = []
+    permission_requests = []
+
+    # Tool call loop (non-streamed)
+    for _ in range(5):
+        response = _get_client().chat.completions.create(
+            model=model, max_completion_tokens=1000,
+            messages=messages, tools=tools if tools else None,
+        )
+        choice = response.choices[0]
+
+        if choice.finish_reason != "tool_calls" or not choice.message.tool_calls:
+            break
+
+        messages.append(choice.message)
+        for tool_call in choice.message.tool_calls:
+            tool_name = tool_call.function.name
+            tool_args = json.loads(tool_call.function.arguments)
+
+            required_perm = get_tool_permission(tool_name)
+            if required_perm:
+                perm_check = await check_permission(agent_id, required_perm,
+                    f"Agent wants to use {tool_name}: {json.dumps(tool_args)}")
+                if not perm_check["allowed"]:
+                    permission_requests.append(perm_check.get("request"))
+                    messages.append({"role": "tool", "tool_call_id": tool_call.id,
+                        "content": f"Permission denied: {required_perm} access not granted."})
+                    tool_calls_log.append({"tool": tool_name, "args": tool_args, "result": "permission_denied"})
+                    continue
+
+            tool = get_tool(tool_name)
+            if not tool:
+                messages.append({"role": "tool", "tool_call_id": tool_call.id, "content": f"Unknown tool: {tool_name}"})
+                continue
+
+            try:
+                sig = inspect.signature(tool["fn"])
+                if "user_id" in sig.parameters and "user_id" not in tool_args:
+                    tool_args["user_id"] = owner_id
+                result = await tool["fn"](**tool_args)
+                tool_calls_log.append({"tool": tool_name, "args": tool_args, "result": str(result)[:500]})
+            except Exception as e:
+                result = f"Tool error: {e}"
+                tool_calls_log.append({"tool": tool_name, "args": tool_args, "result": f"error: {e}"})
+
+            messages.append({"role": "tool", "tool_call_id": tool_call.id, "content": str(result)})
+            if required_perm:
+                await consume_permission(agent_id, required_perm)
+    else:
+        yield {"type": "token", "data": "I ran into a limit processing your request."}
+        yield {"type": "done", "data": {"tool_calls": tool_calls_log, "permission_requests": permission_requests}}
+        return
+
+    if tool_calls_log:
+        yield {"type": "tool_calls", "data": tool_calls_log}
+
+    # Stream the final reply
+    stream = _get_client().chat.completions.create(
+        model=model, max_completion_tokens=1000,
+        messages=messages, stream=True,
+    )
+    for chunk in stream:
+        delta = chunk.choices[0].delta if chunk.choices else None
+        if delta and delta.content:
+            yield {"type": "token", "data": delta.content}
+
+    yield {"type": "done", "data": {"tool_calls": tool_calls_log, "permission_requests": permission_requests}}
+
+
 async def run_agent(user_id: str, user_message: str) -> str:
     """Legacy function for SMS/Telegram — uses default system prompt, no agent scoping."""
     from db import get_recent_messages

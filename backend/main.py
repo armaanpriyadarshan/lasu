@@ -151,6 +151,44 @@ async def chat_with_agent(agent_id: str, req: ChatRequest, _user: str = Depends(
     }
 
 
+@app.post("/agents/{agent_id}/chat/stream")
+async def chat_with_agent_stream(agent_id: str, req: ChatRequest, _user: str = Depends(get_current_user)):
+    from fastapi.responses import StreamingResponse
+    from agent import stream_agent_reply
+
+    agent = await get_agent(agent_id)
+    if not agent:
+        raise HTTPException(status_code=404, detail="Agent not found")
+
+    await save_agent_message(agent_id, req.user_id, "user", req.message)
+
+    async def event_stream():
+        full_reply = ""
+        tool_calls = []
+        async for event in stream_agent_reply(agent_id, req.message, user_id=req.user_id):
+            if event["type"] == "tool_calls":
+                tool_calls = event["data"]
+                yield f"data: {json.dumps(event)}\n\n"
+            elif event["type"] == "token":
+                full_reply += event["data"]
+                yield f"data: {json.dumps(event)}\n\n"
+            elif event["type"] == "done":
+                yield f"data: {json.dumps(event)}\n\n"
+
+        await save_agent_message(agent_id, req.user_id, "assistant", full_reply)
+
+        try:
+            existing = await get_agent_memories(agent_id)
+            memories = await extract_memories(req.message, full_reply, existing)
+            for mem in memories:
+                await upsert_memory(agent_id, mem["key"], mem["value"])
+        except Exception:
+            pass
+
+    import json
+    return StreamingResponse(event_stream(), media_type="text/event-stream")
+
+
 @app.get("/agents/{agent_id}/messages")
 async def get_agent_messages_endpoint(agent_id: str, limit: int = 50, _user: str = Depends(get_current_user)):
     messages = await get_agent_messages(agent_id, limit)
