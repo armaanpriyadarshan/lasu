@@ -229,6 +229,25 @@ This is analogous to OpenClaw's ClaWHub skills system, but consumer-friendly —
 
 ---
 
+## Planned: Headless Browser for Agents
+
+Agents should be able to **control a full web browser** — navigating pages, clicking buttons, filling forms, taking screenshots, and interacting with JavaScript-heavy sites. This goes beyond simple HTTP fetching and enables agents to:
+
+- Book reservations, submit forms, complete sign-ups on behalf of the user
+- Interact with SPAs and dynamic web apps that require JavaScript
+- Take screenshots of pages for visual context
+- Log into websites (with user-provided credentials, permissioned)
+
+**Implementation approach:**
+- **Playwright** (Python) as the browser automation engine
+- **Sandboxed container per browser session** — critical since agents are executing on Sudo infrastructure and browsing arbitrary URLs
+- **Session management** — timeout caps, memory limits, screenshot storage
+- **Permission gated** — requires explicit "web browsing" permission, distinct from simple "web search"
+
+**Dependency:** Requires agent sandboxing infrastructure (Phase 8) before production deployment. Can be prototyped without sandboxing during development.
+
+---
+
 ## Open Questions
 
 - **Voice integration:** Which platform/approach for agent-initiated voice calls?
