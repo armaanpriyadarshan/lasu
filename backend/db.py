@@ -40,11 +40,13 @@ async def save_message(user_id: str, role: str, content: str):
 
 # ── Agent functions ──
 
+AGENT_LIMITS = {"free": 1, "pro": 5, "enterprise": 25}
+
+
 async def create_agent(user_id: str, name: str, description: str, system_prompt: str):
-    # Enforce agent limit per user (e.g. 5 agents max on free tier)
-    existing = supabase.table("agents").select("id").eq("user_id", user_id).execute()
+    existing = supabase.table("agents").select("id").eq("user_id", user_id).eq("is_active", True).execute()
     if len(existing.data) >= 5:
-        raise ValueError("Agent limit reached (max 5 per user)")
+        raise ValueError("Agent limit reached")
     res = supabase.table("agents").insert({
         "user_id": user_id,
         "name": name,
@@ -59,6 +61,7 @@ async def get_agents(user_id: str):
         supabase.table("agents")
         .select("*")
         .eq("user_id", user_id)
+        .eq("is_active", True)
         .order("created_at", desc=False)
         .execute()
     )
@@ -66,7 +69,7 @@ async def get_agents(user_id: str):
 
 
 async def get_agent(agent_id: str):
-    res = supabase.table("agents").select("*").eq("id", agent_id).execute()
+    res = supabase.table("agents").select("*").eq("id", agent_id).eq("is_active", True).execute()
     return res.data[0] if res.data else None
 
 
@@ -75,19 +78,20 @@ async def update_agent(agent_id: str, updates: dict):
         supabase.table("agents")
         .update(updates)
         .eq("id", agent_id)
+        .eq("is_active", True)
         .execute()
     )
     return res.data[0] if res.data else None
 
 
 async def delete_agent(agent_id: str):
-    res = supabase.table("agents").delete().eq("id", agent_id).execute()
-    return bool(res.data)
+    res = supabase.table("agents").update({"is_active": False}).eq("id", agent_id).execute()
+    return len(res.data) > 0
 
 
 async def get_agent_messages(agent_id: str, limit: int = 50):
     res = (
-        supabase.table("agent_messages")
+        supabase.table("messages")
         .select("role, content, created_at")
         .eq("agent_id", agent_id)
         .order("created_at", desc=True)
@@ -98,9 +102,10 @@ async def get_agent_messages(agent_id: str, limit: int = 50):
 
 
 async def save_agent_message(agent_id: str, user_id: str, role: str, content: str):
-    supabase.table("agent_messages").insert({
+    supabase.table("messages").insert({
         "agent_id": agent_id,
         "user_id": user_id,
         "role": role,
         "content": content,
+        "channel": "app",
     }).execute()
