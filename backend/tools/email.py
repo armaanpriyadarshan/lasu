@@ -52,10 +52,9 @@ def register_email_tools():
         parameters={
             "type": "object",
             "properties": {
-                "user_id": {"type": "string", "description": "The user's ID"},
                 "max_results": {"type": "integer", "description": "Number of emails (default 10)", "default": 10},
             },
-            "required": ["user_id"],
+            "required": [],
         },
         fn=read_inbox,
     )
@@ -66,12 +65,11 @@ def register_email_tools():
         parameters={
             "type": "object",
             "properties": {
-                "user_id": {"type": "string", "description": "The user's ID"},
                 "to": {"type": "string", "description": "Recipient email address"},
                 "subject": {"type": "string", "description": "Email subject"},
                 "body": {"type": "string", "description": "Email body text"},
             },
-            "required": ["user_id", "to", "subject", "body"],
+            "required": ["to", "subject", "body"],
         },
         fn=send_email,
     )

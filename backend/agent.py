@@ -60,11 +60,14 @@ Output ONLY the system prompt text, nothing else.""",
     return response.choices[0].message.content
 
 
-async def run_agent_chat(agent_id: str, user_message: str) -> dict:
+async def run_agent_chat(agent_id: str, user_message: str, user_id: str = None) -> dict:
     """Run a chat turn. Returns {"reply": str, "tool_calls": list, "permission_requests": list}."""
     agent = await get_agent(agent_id)
     if not agent:
         return {"reply": "Agent not found.", "tool_calls": [], "permission_requests": []}
+
+    # user_id for auto-injecting into tools that need it
+    owner_id = user_id or agent.get("user_id")
 
     system_prompt = agent.get("system_prompt") or DEFAULT_SYSTEM_PROMPT
     model = agent.get("model", "gpt-5.4")
@@ -131,6 +134,11 @@ async def run_agent_chat(agent_id: str, user_message: str) -> dict:
                 continue
 
             try:
+                # Auto-inject user_id for tools that need it
+                import inspect
+                sig = inspect.signature(tool["fn"])
+                if "user_id" in sig.parameters and "user_id" not in tool_args:
+                    tool_args["user_id"] = owner_id
                 result = await tool["fn"](**tool_args)
                 tool_calls_log.append({"tool": tool_name, "args": tool_args, "result": str(result)[:500]})
             except Exception as e:

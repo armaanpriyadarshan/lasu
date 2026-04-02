@@ -49,11 +49,10 @@ def register_contacts_tools():
         parameters={
             "type": "object",
             "properties": {
-                "user_id": {"type": "string", "description": "The user's ID"},
                 "query": {"type": "string", "description": "Search query (optional)", "default": ""},
                 "max_results": {"type": "integer", "description": "Max contacts (default 20)", "default": 20},
             },
-            "required": ["user_id"],
+            "required": [],
         },
         fn=list_contacts,
     )

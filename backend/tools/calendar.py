@@ -53,10 +53,9 @@ def register_calendar_tools():
         parameters={
             "type": "object",
             "properties": {
-                "user_id": {"type": "string", "description": "The user's ID"},
                 "days": {"type": "integer", "description": "Days ahead to look (default 7)", "default": 7},
             },
-            "required": ["user_id"],
+            "required": [],
         },
         fn=list_events,
     )
@@ -67,13 +66,12 @@ def register_calendar_tools():
         parameters={
             "type": "object",
             "properties": {
-                "user_id": {"type": "string", "description": "The user's ID"},
                 "summary": {"type": "string", "description": "Event title"},
                 "start_time": {"type": "string", "description": "Start time ISO 8601"},
                 "end_time": {"type": "string", "description": "End time ISO 8601"},
                 "description": {"type": "string", "description": "Event description", "default": ""},
             },
-            "required": ["user_id", "summary", "start_time", "end_time"],
+            "required": ["summary", "start_time", "end_time"],
         },
         fn=create_event,
     )

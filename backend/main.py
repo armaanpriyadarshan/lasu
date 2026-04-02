@@ -119,7 +119,7 @@ async def chat_with_agent(agent_id: str, req: ChatRequest):
 
     await save_agent_message(agent_id, req.user_id, "user", req.message)
 
-    result = await run_agent_chat(agent_id, req.message)
+    result = await run_agent_chat(agent_id, req.message, user_id=req.user_id)
 
     reply = result["reply"]
     tool_calls = result.get("tool_calls", [])
