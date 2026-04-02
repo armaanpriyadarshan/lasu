@@ -16,7 +16,9 @@ from db import (
     get_agent_permissions, grant_permission, revoke_permission,
     get_pending_requests, resolve_permission_request,
     create_job, get_jobs, get_job, update_job, delete_job,
+    get_oauth_token,
 )
+from google_auth import get_auth_url, exchange_code
 from agent import run_agent, run_agent_chat, generate_system_prompt
 from memory import extract_memories
 from models import MessageRequest, CreateAgentRequest, UpdateAgentRequest, ChatRequest, GrantPermissionRequest, CreateJobRequest, UpdateJobRequest
@@ -245,3 +247,24 @@ async def delete_job_endpoint(agent_id: str, job_id: str):
     if not success:
         raise HTTPException(status_code=404, detail="Job not found")
     return {"ok": True}
+
+
+# --- Google OAuth endpoints ---
+
+@app.get("/auth/google/url")
+async def google_auth_url(user_id: str):
+    url = get_auth_url(user_id)
+    return {"url": url}
+
+
+@app.get("/auth/google/callback")
+async def google_callback(code: str, state: str):
+    user_id = state
+    await exchange_code(code, user_id)
+    return {"ok": True, "message": "Google account connected successfully"}
+
+
+@app.get("/auth/google/status")
+async def google_status(user_id: str):
+    token = await get_oauth_token(user_id, "google")
+    return {"connected": token is not None}

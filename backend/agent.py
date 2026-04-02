@@ -4,10 +4,18 @@ from openai import OpenAI
 from db import get_agent_messages, get_agent, get_agent_memories
 from tools import get_all_tools, get_tool, get_tool_permission
 from tools.web_research import register_web_tools
+from tools.calendar import register_calendar_tools
+from tools.email import register_email_tools
+from tools.contacts import register_contacts_tools
+from tools.files import register_files_tools
 from permissions import check_permission, consume_permission
 
 # Register all tools
 register_web_tools()
+register_calendar_tools()
+register_email_tools()
+register_contacts_tools()
+register_files_tools()
 
 
 def _get_client():
