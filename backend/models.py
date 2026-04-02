@@ -28,7 +28,8 @@ class ChatRequest(BaseModel):
 
 
 class GrantPermissionRequest(BaseModel):
-    grant_type: str  # "one_time" or "permanent"
+    grant_type: str = "permanent"  # "one_time" or "permanent"
+    permission: Optional[str] = None  # for direct grants
 
 
 class CreateJobRequest(BaseModel):

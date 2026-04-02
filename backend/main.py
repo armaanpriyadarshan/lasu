@@ -12,6 +12,7 @@ from db import (
     save_message, get_recent_messages, get_or_create_user,
     create_agent, get_agents, get_agent, update_agent, delete_agent,
     get_agent_messages, save_agent_message,
+    get_or_create_session, get_sessions, close_session,
     get_agent_memories, upsert_memory, delete_memory,
     get_agent_permissions, grant_permission, revoke_permission,
     get_pending_requests, resolve_permission_request,
@@ -125,7 +126,10 @@ async def chat_with_agent(agent_id: str, req: ChatRequest, _user: str = Depends(
     if not agent:
         raise HTTPException(status_code=404, detail="Agent not found")
 
-    await save_agent_message(agent_id, req.user_id, "user", req.message)
+    session = await get_or_create_session(agent_id)
+    session_id = session["id"]
+
+    await save_agent_message(agent_id, req.user_id, "user", req.message, session_id=session_id)
 
     result = await run_agent_chat(agent_id, req.message, user_id=req.user_id)
 
@@ -133,7 +137,7 @@ async def chat_with_agent(agent_id: str, req: ChatRequest, _user: str = Depends(
     tool_calls = result.get("tool_calls", [])
     perm_requests = result.get("permission_requests", [])
 
-    await save_agent_message(agent_id, req.user_id, "assistant", reply)
+    await save_agent_message(agent_id, req.user_id, "assistant", reply, session_id=session_id)
 
     # Extract and save memories (non-critical, don't fail the response)
     try:
@@ -151,10 +155,76 @@ async def chat_with_agent(agent_id: str, req: ChatRequest, _user: str = Depends(
     }
 
 
+@app.post("/agents/{agent_id}/chat/stream")
+async def chat_with_agent_stream(agent_id: str, req: ChatRequest, _user: str = Depends(get_current_user)):
+    from fastapi.responses import StreamingResponse
+    from agent import stream_agent_reply
+
+    agent = await get_agent(agent_id)
+    if not agent:
+        raise HTTPException(status_code=404, detail="Agent not found")
+
+    session = await get_or_create_session(agent_id)
+    session_id = session["id"]
+
+    await save_agent_message(agent_id, req.user_id, "user", req.message, session_id=session_id)
+
+    async def event_stream():
+        full_reply = ""
+        tool_calls = []
+        # Send session info first
+        yield f"data: {json.dumps({'type': 'session', 'data': {'id': session_id}})}\n\n"
+        async for event in stream_agent_reply(agent_id, req.message, user_id=req.user_id):
+            if event["type"] == "tool_calls":
+                tool_calls = event["data"]
+                yield f"data: {json.dumps(event)}\n\n"
+            elif event["type"] == "token":
+                full_reply += event["data"]
+                yield f"data: {json.dumps(event)}\n\n"
+            elif event["type"] == "done":
+                yield f"data: {json.dumps(event)}\n\n"
+
+        await save_agent_message(agent_id, req.user_id, "assistant", full_reply, session_id=session_id)
+
+        try:
+            existing = await get_agent_memories(agent_id)
+            memories = await extract_memories(req.message, full_reply, existing)
+            for mem in memories:
+                await upsert_memory(agent_id, mem["key"], mem["value"])
+        except Exception:
+            pass
+
+    import json
+    return StreamingResponse(event_stream(), media_type="text/event-stream")
+
+
 @app.get("/agents/{agent_id}/messages")
-async def get_agent_messages_endpoint(agent_id: str, limit: int = 50, _user: str = Depends(get_current_user)):
-    messages = await get_agent_messages(agent_id, limit)
+async def get_agent_messages_endpoint(agent_id: str, limit: int = 50, session_id: str = None, _user: str = Depends(get_current_user)):
+    messages = await get_agent_messages(agent_id, limit, session_id=session_id)
     return {"messages": messages}
+
+
+@app.get("/agents/{agent_id}/sessions")
+async def list_sessions(agent_id: str, _user: str = Depends(get_current_user)):
+    sessions = await get_sessions(agent_id)
+    return {"sessions": sessions}
+
+
+@app.post("/agents/{agent_id}/sessions")
+async def new_session(agent_id: str, _user: str = Depends(get_current_user)):
+    # Close current active session
+    sessions = await get_sessions(agent_id)
+    for s in sessions:
+        if s["is_active"]:
+            await close_session(s["id"])
+    session = await get_or_create_session(agent_id)
+    return session
+
+
+@app.post("/agents/{agent_id}/sessions/{session_id}/close")
+async def close_session_endpoint(agent_id: str, session_id: str, _user: str = Depends(get_current_user)):
+    await close_session(session_id)
+    return {"ok": True}
 
 
 # --- Memory endpoints ---
@@ -206,6 +276,12 @@ async def deny_permission_endpoint(agent_id: str, request_id: str, _user: str = 
     if not resolved:
         raise HTTPException(status_code=404, detail="Request not found or already resolved")
     return {"ok": True}
+
+
+@app.post("/agents/{agent_id}/permissions/grant")
+async def direct_grant_permission(agent_id: str, req: GrantPermissionRequest, _user: str = Depends(get_current_user)):
+    perm = await grant_permission(agent_id, req.permission, req.grant_type)
+    return perm
 
 
 @app.post("/agents/{agent_id}/permissions/{permission_id}/revoke")

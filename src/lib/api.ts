@@ -120,8 +120,86 @@ export async function chatWithAgent(agentId: string, userId: string, message: st
   return res.json() as Promise<{ reply: string; tool_calls: Array<{ tool: string; args: Record<string, unknown>; result: string }>; permission_requests: unknown[] }>
 }
 
+export async function chatWithAgentStream(
+  agentId: string,
+  userId: string,
+  message: string,
+  onToken: (token: string) => void,
+  onToolCalls?: (calls: Array<{ tool: string; args: Record<string, unknown>; result: string }>) => void,
+  onDone?: (data: { tool_calls: unknown[]; permission_requests: unknown[] }) => void,
+) {
+  const res = await authFetch(`${API_URL}/agents/${agentId}/chat/stream`, {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({ user_id: userId, message }),
+  })
+  if (!res.ok) throw new Error('Failed to send message')
+
+  const reader = res.body?.getReader()
+  if (!reader) throw new Error('No stream')
+
+  const decoder = new TextDecoder()
+  let buffer = ''
+
+  while (true) {
+    const { done, value } = await reader.read()
+    if (done) break
+
+    buffer += decoder.decode(value, { stream: true })
+    const lines = buffer.split('\n')
+    buffer = lines.pop() || ''
+
+    for (const line of lines) {
+      if (!line.startsWith('data: ')) continue
+      try {
+        const event = JSON.parse(line.slice(6))
+        if (event.type === 'token') onToken(event.data)
+        else if (event.type === 'tool_calls') onToolCalls?.(event.data)
+        else if (event.type === 'done') onDone?.(event.data)
+      } catch {}
+    }
+  }
+}
+
 export async function getAgentMessages(agentId: string, limit = 50) {
   const res = await authFetch(`${API_URL}/agents/${agentId}/messages?limit=${limit}`)
+  if (!res.ok) throw new Error('Failed to fetch messages')
+  return res.json() as Promise<{ messages: AgentMessage[] }>
+}
+
+// ── Session types ──
+
+export type AgentSession = {
+  id: string
+  agent_id: string
+  title: string | null
+  started_at: string
+  last_active_at: string
+  is_active: boolean
+}
+
+// ── Session API ──
+
+export async function getAgentSessions(agentId: string) {
+  const res = await authFetch(`${API_URL}/agents/${agentId}/sessions`)
+  if (!res.ok) throw new Error('Failed to fetch sessions')
+  return res.json() as Promise<{ sessions: AgentSession[] }>
+}
+
+export async function createNewSession(agentId: string) {
+  const res = await authFetch(`${API_URL}/agents/${agentId}/sessions`, { method: 'POST' })
+  if (!res.ok) throw new Error('Failed to create session')
+  return res.json() as Promise<AgentSession>
+}
+
+export async function closeSession(agentId: string, sessionId: string) {
+  const res = await authFetch(`${API_URL}/agents/${agentId}/sessions/${sessionId}/close`, { method: 'POST' })
+  if (!res.ok) throw new Error('Failed to close session')
+  return res.json() as Promise<{ ok: boolean }>
+}
+
+export async function getSessionMessages(agentId: string, sessionId: string, limit = 50) {
+  const res = await authFetch(`${API_URL}/agents/${agentId}/messages?session_id=${sessionId}&limit=${limit}`)
   if (!res.ok) throw new Error('Failed to fetch messages')
   return res.json() as Promise<{ messages: AgentMessage[] }>
 }
@@ -182,6 +260,16 @@ export async function getAgentPermissions(agentId: string) {
   const res = await authFetch(`${API_URL}/agents/${agentId}/permissions`)
   if (!res.ok) throw new Error('Failed to fetch permissions')
   return res.json() as Promise<{ permissions: AgentPermission[] }>
+}
+
+export async function grantPermission(agentId: string, permission: string) {
+  const res = await authFetch(`${API_URL}/agents/${agentId}/permissions/grant`, {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({ permission, grant_type: 'permanent' }),
+  })
+  if (!res.ok) throw new Error('Failed to grant permission')
+  return res.json() as Promise<AgentPermission>
 }
 
 export async function getPendingRequests(agentId: string) {
