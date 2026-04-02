@@ -1,4 +1,4 @@
-import React from 'react'
+import { useCallback, useState } from 'react'
 import {
   Platform,
   Pressable,
@@ -9,8 +9,11 @@ import {
 } from 'react-native'
 import Animated, { FadeIn, FadeInDown } from 'react-native-reanimated'
 
+import { useFocusEffect, useRouter } from 'expo-router'
 import { ThemedText } from '@/components/themed-text'
 import { Colors } from '@/constants/theme'
+import { useAuth } from '@/lib/auth'
+import { listAgents, type Agent } from '@/lib/api'
 
 const C = Colors.light
 const isWeb = Platform.OS === 'web'
@@ -30,11 +33,6 @@ function relativeTime(minutesAgo: number) {
 }
 
 // ── Mock data ────────────────────────────────────────────────────────
-const STATS = [
-  { label: 'Messages today', value: '12', subtitle: '+3 from yesterday', positive: true },
-  { label: 'Active channels', value: '2', subtitle: 'SMS, Email', positive: false },
-  { label: 'Skills running', value: '3', subtitle: 'All healthy', positive: true },
-]
 
 type ActivityItem = {
   id: string
@@ -148,6 +146,18 @@ function ActivityRow({ item, index }: { item: ActivityItem; index: number }) {
 export default function DashboardScreen() {
   const { width } = useWindowDimensions()
   const isDesktop = width > 768
+  const { userId } = useAuth()
+  const router = useRouter()
+  const [agents, setAgents] = useState<Agent[]>([])
+
+  useFocusEffect(
+    useCallback(() => {
+      if (!userId) return
+      listAgents(userId)
+        .then(({ agents }) => setAgents(agents))
+        .catch(() => {})
+    }, [userId])
+  )
 
   return (
     <ScrollView
@@ -169,7 +179,11 @@ export default function DashboardScreen() {
 
       {/* Stat cards */}
       <View style={[styles.statsGrid, isDesktop && styles.statsGridDesk]}>
-        {STATS.map((stat, i) => (
+        {[
+          { label: 'Messages today', value: '—', subtitle: 'Coming soon', positive: false },
+          { label: 'Active agents', value: String(agents.length), subtitle: agents.length === 0 ? 'Create your first' : 'Running', positive: agents.length > 0 },
+          { label: 'Skills running', value: '0', subtitle: 'Coming soon', positive: false },
+        ].map((stat, i) => (
           <StatCard key={stat.label} {...stat} index={i} />
         ))}
       </View>
@@ -200,7 +214,7 @@ export default function DashboardScreen() {
           </View>
         ))}
         <Pressable
-    
+
           dataSet={{ hover: 'vellum' }}
           style={({ pressed }) => [styles.channelPillAdd, pressed && { backgroundColor: C.vellum }]}
         >
@@ -209,6 +223,22 @@ export default function DashboardScreen() {
           </ThemedText>
         </Pressable>
       </View>
+      {agents.length > 0 && (
+        <View style={styles.channelSection}>
+          {agents.map((a) => (
+            <Pressable
+              key={a.id}
+              onPress={() => router.push(`/chat/${a.id}`)}
+              style={styles.channelPill}
+            >
+              <View style={[styles.channelDot, { backgroundColor: C.tide }]} />
+              <ThemedText style={[styles.channelText, { color: C.fadedInk }]}>
+                {a.name}
+              </ThemedText>
+            </Pressable>
+          ))}
+        </View>
+      )}
     </ScrollView>
   )
 }
