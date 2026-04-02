@@ -1,4 +1,4 @@
-export const API_URL = __DEV__ ? 'http://localhost:8000' : 'https://your-railway-url.railway.app'
+export const API_URL = __DEV__ ? 'http://localhost:8001' : 'https://your-railway-url.railway.app'
 
 export async function sendMessage(userId: string, content: string, token: string) {
   const res = await fetch(`${API_URL}/message`, {

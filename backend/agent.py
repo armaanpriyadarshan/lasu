@@ -2,7 +2,9 @@ import os
 from openai import OpenAI
 from db import get_agent_messages, get_agent
 
-client = OpenAI(api_key=os.environ["OPENAI_API_KEY"])
+
+def _get_client():
+    return OpenAI(api_key=os.environ["OPENAI_API_KEY"])
 
 DEFAULT_SYSTEM_PROMPT = """You are sudo, a personal intelligence assistant running 24/7 on behalf of this user.
 You know them deeply and respond with that context. You are concise, direct, and useful.
@@ -14,7 +16,7 @@ Do not use markdown formatting. Plain text only."""
 
 async def generate_system_prompt(description: str) -> str:
     """Use LLM to generate an effective system prompt from a user's freeform description."""
-    response = client.chat.completions.create(
+    response = _get_client().chat.completions.create(
         model="gpt-5.4",
         max_completion_tokens=500,
         messages=[
@@ -46,7 +48,7 @@ async def run_agent_chat(agent_id: str, user_message: str) -> str:
     messages.extend({"role": m["role"], "content": m["content"]} for m in history)
     messages.append({"role": "user", "content": user_message})
 
-    response = client.chat.completions.create(
+    response = _get_client().chat.completions.create(
         model=model,
         max_completion_tokens=1000,
         messages=messages,
@@ -65,7 +67,7 @@ async def run_agent(user_id: str, user_message: str) -> str:
     messages.extend({"role": m["role"], "content": m["content"]} for m in history)
     messages.append({"role": "user", "content": user_message})
 
-    response = client.chat.completions.create(
+    response = _get_client().chat.completions.create(
         model="gpt-5.4",
         max_completion_tokens=1000,
         messages=messages,

@@ -52,6 +52,7 @@ async def handle_message(req: MessageRequest):
 
 @app.post("/agents")
 async def create_agent_endpoint(req: CreateAgentRequest):
+    await get_or_create_user(req.user_id)
     system_prompt = await generate_system_prompt(req.description)
     try:
         agent = await create_agent(req.user_id, req.name, req.description, system_prompt)
