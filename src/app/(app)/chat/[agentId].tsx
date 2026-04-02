@@ -407,8 +407,8 @@ export default function ChatScreen() {
                   return (
                     <View key={perm.id} style={styles.permGrantedRow}>
                       <ThemedText style={styles.permGrantedIcon}>{permIcons[perm.permission] || '🔑'}</ThemedText>
-                      <ThemedText style={[styles.panelKey, { color: C.ink, flex: 1 }]}>
-                        {perm.permission}
+                      <ThemedText serif style={[styles.permGrantedName, { color: C.ink }]}>
+                        {perm.permission.charAt(0).toUpperCase() + perm.permission.slice(1)}
                       </ThemedText>
                       <ThemedText style={[styles.permGrantedStatus, { color: C.pencil }]}>
                         {perm.grant_type === 'permanent' ? 'Always' : 'Once'}
@@ -758,8 +758,8 @@ const styles = StyleSheet.create({
   },
   integrationName: {
     fontSize: 14,
-    fontWeight: '500',
-    ...(isWeb && { fontFamily: 'var(--font-display)' } as any),
+    fontWeight: '400',
+    ...(isWeb && { fontFamily: 'var(--font-serif)' } as any),
   },
   integrationDesc: {
     fontSize: 11,
@@ -795,14 +795,24 @@ const styles = StyleSheet.create({
   permGrantedRow: {
     flexDirection: 'row',
     alignItems: 'center',
-    gap: 10,
-    paddingVertical: 8,
+    gap: 12,
+    paddingVertical: 10,
+    paddingHorizontal: 4,
   },
   permGrantedIcon: {
-    fontSize: 16,
+    fontSize: 18,
+  },
+  permGrantedName: {
+    flex: 1,
+    fontSize: 14,
+    fontWeight: '400',
+    ...(isWeb && { fontFamily: 'var(--font-serif)' } as any),
   },
   permGrantedStatus: {
     fontSize: 10,
+    fontWeight: '400',
+    textTransform: 'uppercase',
+    letterSpacing: 0.5,
     ...(isWeb && { fontFamily: 'var(--font-mono)' } as any),
   },
   panelEmpty: {
