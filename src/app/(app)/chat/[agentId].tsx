@@ -26,8 +26,9 @@ import {
   getAgentPermissions, grantPermission, revokePermission,
   getJobs, createJob, updateJob, deleteJob,
   getGoogleAuthUrl, getGoogleStatus,
+  getAgentSessions, createNewSession, getSessionMessages,
   type Agent, type AgentMessage, type AgentMemory,
-  type PermissionRequest, type AgentPermission, type AgentJob,
+  type PermissionRequest, type AgentPermission, type AgentJob, type AgentSession,
 } from '@/lib/api'
 
 const C = Colors.light
@@ -114,6 +115,9 @@ export default function ChatScreen() {
   const [showGoogleConnect, setShowGoogleConnect] = useState(false)
   const [googleConnected, setGoogleConnected] = useState(false)
   const [panel, setPanel] = useState<'none' | 'memory' | 'permissions'>('none')
+  const [sessions, setSessions] = useState<AgentSession[]>([])
+  const [activeSession, setActiveSession] = useState<AgentSession | null>(null)
+  const [showSessions, setShowSessions] = useState(false)
 
   useFocusEffect(
     useCallback(() => {
@@ -121,21 +125,32 @@ export default function ChatScreen() {
       setLoading(true)
       Promise.all([
         getAgent(agentId),
-        getAgentMessages(agentId),
+        getAgentSessions(agentId),
         getAgentMemories(agentId),
         getPendingRequests(agentId),
         getAgentPermissions(agentId),
         getJobs(agentId),
         getGoogleStatus(userId),
       ])
-        .then(([agentData, { messages }, { memories }, { requests }, { permissions }, { jobs }, googleStatus]) => {
+        .then(async ([agentData, { sessions }, { memories }, { requests }, { permissions }, { jobs }, googleStatus]) => {
           setAgent(agentData)
-          setMessages(messages)
+          setSessions(sessions)
           setMemories(memories)
           setPermRequests(requests)
           setPermissions(permissions)
           setHeartbeat(jobs.find((j: AgentJob) => j.job_type === 'heartbeat') || null)
           setGoogleConnected(googleStatus.connected)
+
+          // Load active session messages, or all messages if no sessions yet
+          const active = sessions.find((s: AgentSession) => s.is_active)
+          if (active) {
+            setActiveSession(active)
+            const { messages } = await getSessionMessages(agentId, active.id)
+            setMessages(messages)
+          } else {
+            const { messages } = await getAgentMessages(agentId)
+            setMessages(messages)
+          }
         })
         .catch(() => router.back())
         .finally(() => setLoading(false))
@@ -481,6 +496,58 @@ export default function ChatScreen() {
                 </ThemedText>
               </Pressable>
             </View>
+
+            <View style={styles.sessionBar}>
+              <Pressable
+                onPress={async () => {
+                  if (!agentId) return
+                  const session = await createNewSession(agentId)
+                  setActiveSession(session)
+                  setMessages([])
+                  const { sessions } = await getAgentSessions(agentId)
+                  setSessions(sessions)
+                }}
+                dataSet={{ hover: 'vellum' }}
+                style={styles.newChatBtn}
+              >
+                <ThemedText style={[styles.newChatText, { color: C.pencil }]}>+ New chat</ThemedText>
+              </Pressable>
+              {sessions.length > 1 && (
+                <Pressable
+                  onPress={() => setShowSessions(!showSessions)}
+                  dataSet={{ hover: 'vellum' }}
+                  style={styles.newChatBtn}
+                >
+                  <ThemedText style={[styles.newChatText, { color: C.pencil }]}>
+                    {showSessions ? 'Hide history' : `${sessions.length} chats`}
+                  </ThemedText>
+                </Pressable>
+              )}
+            </View>
+
+            {showSessions && (
+              <View style={styles.sessionList}>
+                {sessions.map((s) => (
+                  <Pressable
+                    key={s.id}
+                    onPress={async () => {
+                      if (!agentId) return
+                      setActiveSession(s)
+                      const { messages } = await getSessionMessages(agentId, s.id)
+                      setMessages(messages)
+                      setShowSessions(false)
+                    }}
+                    dataSet={{ hover: 'vellum' }}
+                    style={[styles.sessionItem, activeSession?.id === s.id && styles.sessionItemActive]}
+                  >
+                    <View style={[styles.sessionDot, { backgroundColor: s.is_active ? C.connectedText : C.ruledLine }]} />
+                    <ThemedText style={[styles.sessionText, { color: activeSession?.id === s.id ? C.ink : C.pencil }]}>
+                      {s.title || new Date(s.started_at).toLocaleDateString(undefined, { month: 'short', day: 'numeric', hour: '2-digit', minute: '2-digit' })}
+                    </ThemedText>
+                  </Pressable>
+                ))}
+              </View>
+            )}
 
             {messages.length === 0 && (
               <View style={styles.emptyChat}>
@@ -841,6 +908,50 @@ const styles = StyleSheet.create({
   panelAction: {
     padding: 8,
     ...(isWeb && { cursor: 'pointer' } as any),
+  },
+
+  // ── Sessions ──
+  sessionBar: {
+    flexDirection: 'row',
+    justifyContent: 'center',
+    gap: 8,
+    marginTop: 8,
+  },
+  newChatBtn: {
+    paddingVertical: 4,
+    paddingHorizontal: 10,
+    borderRadius: 6,
+    ...(isWeb && { cursor: 'pointer', transition: 'background-color 150ms ease' } as any),
+  },
+  newChatText: {
+    fontSize: 11,
+    fontWeight: '400',
+    ...(isWeb && { fontFamily: 'var(--font-mono)' } as any),
+  },
+  sessionList: {
+    marginTop: 8,
+    gap: 2,
+  },
+  sessionItem: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 8,
+    paddingVertical: 6,
+    paddingHorizontal: 10,
+    borderRadius: 6,
+    ...(isWeb && { cursor: 'pointer', transition: 'background-color 150ms ease' } as any),
+  },
+  sessionItemActive: {
+    backgroundColor: C.agedPaper,
+  },
+  sessionDot: {
+    width: 5,
+    height: 5,
+    borderRadius: 3,
+  },
+  sessionText: {
+    fontSize: 11,
+    ...(isWeb && { fontFamily: 'var(--font-mono)' } as any),
   },
 
   // ── Messages ──

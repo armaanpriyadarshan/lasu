@@ -163,26 +163,83 @@ async def delete_agent(agent_id: str):
     return len(res.data) > 0
 
 
-async def get_agent_messages(agent_id: str, limit: int = 50):
-    res = (
-        supabase.table("messages")
-        .select("role, content, created_at")
-        .eq("agent_id", agent_id)
-        .order("created_at", desc=True)
-        .limit(limit)
-        .execute()
-    )
+async def get_agent_messages(agent_id: str, limit: int = 50, session_id: str = None):
+    q = supabase.table("messages").select("role, content, created_at, session_id").eq("agent_id", agent_id)
+    if session_id:
+        q = q.eq("session_id", session_id)
+    res = q.order("created_at", desc=True).limit(limit).execute()
     return list(reversed(res.data))
 
 
-async def save_agent_message(agent_id: str, user_id: str, role: str, content: str):
-    supabase.table("messages").insert({
+async def save_agent_message(agent_id: str, user_id: str, role: str, content: str, session_id: str = None):
+    data = {
         "agent_id": agent_id,
         "user_id": user_id,
         "role": role,
         "content": content,
         "channel": "app",
-    }).execute()
+    }
+    if session_id:
+        data["session_id"] = session_id
+    supabase.table("messages").insert(data).execute()
+
+
+# ── Session functions ──
+
+SESSION_TIMEOUT_MINUTES = 30
+
+
+async def get_or_create_session(agent_id: str) -> dict:
+    """Get the active session or create a new one. Auto-closes stale sessions."""
+    res = (
+        supabase.table("agent_sessions")
+        .select("*")
+        .eq("agent_id", agent_id)
+        .eq("is_active", True)
+        .order("last_active_at", desc=True)
+        .limit(1)
+        .execute()
+    )
+    if res.data:
+        session = res.data[0]
+        last_active = datetime.fromisoformat(session["last_active_at"].replace("Z", "+00:00"))
+        now = datetime.now(timezone.utc)
+        if (now - last_active).total_seconds() < SESSION_TIMEOUT_MINUTES * 60:
+            # Still active — touch it
+            supabase.table("agent_sessions").update({"last_active_at": "now()"}).eq("id", session["id"]).execute()
+            return session
+        else:
+            # Stale — close it
+            supabase.table("agent_sessions").update({"is_active": False}).eq("id", session["id"]).execute()
+
+    # Create new session
+    new = supabase.table("agent_sessions").insert({"agent_id": agent_id}).execute()
+    return new.data[0]
+
+
+async def get_sessions(agent_id: str) -> list:
+    res = (
+        supabase.table("agent_sessions")
+        .select("*")
+        .eq("agent_id", agent_id)
+        .order("started_at", desc=True)
+        .execute()
+    )
+    return res.data
+
+
+async def get_session(session_id: str) -> dict | None:
+    res = supabase.table("agent_sessions").select("*").eq("id", session_id).execute()
+    return res.data[0] if res.data else None
+
+
+async def update_session(session_id: str, updates: dict):
+    res = supabase.table("agent_sessions").update(updates).eq("id", session_id).execute()
+    return res.data[0] if res.data else None
+
+
+async def close_session(session_id: str):
+    supabase.table("agent_sessions").update({"is_active": False}).eq("id", session_id).execute()
 
 
 # ── Memory functions ──

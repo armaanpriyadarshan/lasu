@@ -167,6 +167,43 @@ export async function getAgentMessages(agentId: string, limit = 50) {
   return res.json() as Promise<{ messages: AgentMessage[] }>
 }
 
+// ── Session types ──
+
+export type AgentSession = {
+  id: string
+  agent_id: string
+  title: string | null
+  started_at: string
+  last_active_at: string
+  is_active: boolean
+}
+
+// ── Session API ──
+
+export async function getAgentSessions(agentId: string) {
+  const res = await authFetch(`${API_URL}/agents/${agentId}/sessions`)
+  if (!res.ok) throw new Error('Failed to fetch sessions')
+  return res.json() as Promise<{ sessions: AgentSession[] }>
+}
+
+export async function createNewSession(agentId: string) {
+  const res = await authFetch(`${API_URL}/agents/${agentId}/sessions`, { method: 'POST' })
+  if (!res.ok) throw new Error('Failed to create session')
+  return res.json() as Promise<AgentSession>
+}
+
+export async function closeSession(agentId: string, sessionId: string) {
+  const res = await authFetch(`${API_URL}/agents/${agentId}/sessions/${sessionId}/close`, { method: 'POST' })
+  if (!res.ok) throw new Error('Failed to close session')
+  return res.json() as Promise<{ ok: boolean }>
+}
+
+export async function getSessionMessages(agentId: string, sessionId: string, limit = 50) {
+  const res = await authFetch(`${API_URL}/agents/${agentId}/messages?session_id=${sessionId}&limit=${limit}`)
+  if (!res.ok) throw new Error('Failed to fetch messages')
+  return res.json() as Promise<{ messages: AgentMessage[] }>
+}
+
 // ── Memory types ──
 
 export type AgentMemory = {
