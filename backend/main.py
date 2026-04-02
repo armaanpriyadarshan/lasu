@@ -11,10 +11,12 @@ from db import (
     create_agent, get_agents, get_agent, update_agent, delete_agent,
     get_agent_messages, save_agent_message,
     get_agent_memories, upsert_memory, delete_memory,
+    get_agent_permissions, grant_permission, revoke_permission,
+    get_pending_requests, resolve_permission_request,
 )
 from agent import run_agent, run_agent_chat, generate_system_prompt
 from memory import extract_memories
-from models import MessageRequest, CreateAgentRequest, UpdateAgentRequest, ChatRequest
+from models import MessageRequest, CreateAgentRequest, UpdateAgentRequest, ChatRequest, GrantPermissionRequest
 
 app = FastAPI()
 
@@ -139,4 +141,47 @@ async def delete_memory_endpoint(agent_id: str, memory_id: str):
     success = await delete_memory(memory_id)
     if not success:
         raise HTTPException(status_code=404, detail="Memory not found")
+    return {"ok": True}
+
+
+# --- Permission endpoints ---
+
+@app.get("/agents/{agent_id}/permissions")
+async def get_permissions(agent_id: str):
+    permissions = await get_agent_permissions(agent_id)
+    return {"permissions": permissions}
+
+
+@app.get("/agents/{agent_id}/permissions/requests")
+async def get_permission_requests(agent_id: str):
+    requests = await get_pending_requests(agent_id)
+    return {"requests": requests}
+
+
+@app.post("/agents/{agent_id}/permissions/requests/{request_id}/grant")
+async def grant_permission_endpoint(agent_id: str, request_id: str, req: GrantPermissionRequest):
+    if req.grant_type not in ("one_time", "permanent"):
+        raise HTTPException(status_code=400, detail="grant_type must be 'one_time' or 'permanent'")
+
+    resolved = await resolve_permission_request(request_id, "approved", req.grant_type)
+    if not resolved:
+        raise HTTPException(status_code=404, detail="Request not found or already resolved")
+
+    perm = await grant_permission(agent_id, resolved["permission"], req.grant_type)
+    return perm
+
+
+@app.post("/agents/{agent_id}/permissions/requests/{request_id}/deny")
+async def deny_permission_endpoint(agent_id: str, request_id: str):
+    resolved = await resolve_permission_request(request_id, "denied")
+    if not resolved:
+        raise HTTPException(status_code=404, detail="Request not found or already resolved")
+    return {"ok": True}
+
+
+@app.post("/agents/{agent_id}/permissions/{permission_id}/revoke")
+async def revoke_permission_endpoint(agent_id: str, permission_id: str):
+    success = await revoke_permission(permission_id)
+    if not success:
+        raise HTTPException(status_code=404, detail="Permission not found or already revoked")
     return {"ok": True}

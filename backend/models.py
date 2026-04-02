@@ -23,3 +23,7 @@ class UpdateAgentRequest(BaseModel):
 class ChatRequest(BaseModel):
     user_id: str
     message: str
+
+
+class GrantPermissionRequest(BaseModel):
+    grant_type: str  # "one_time" or "permanent"
