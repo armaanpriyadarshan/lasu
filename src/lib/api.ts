@@ -126,3 +126,66 @@ export async function deleteAgentMemory(agentId: string, memoryId: string) {
   if (!res.ok) throw new Error('Failed to delete memory')
   return res.json() as Promise<{ ok: boolean }>
 }
+
+// ── Permission types ──
+
+export type AgentPermission = {
+  id: string
+  agent_id: string
+  permission: string
+  grant_type: 'one_time' | 'permanent'
+  granted_at: string
+  revoked_at: string | null
+  expires_at: string | null
+}
+
+export type PermissionRequest = {
+  id: string
+  agent_id: string
+  permission: string
+  reason: string
+  status: 'pending' | 'approved' | 'denied'
+  grant_type: string | null
+  created_at: string
+  resolved_at: string | null
+}
+
+// ── Permission API ──
+
+export async function getAgentPermissions(agentId: string) {
+  const res = await fetch(`${API_URL}/agents/${agentId}/permissions`)
+  if (!res.ok) throw new Error('Failed to fetch permissions')
+  return res.json() as Promise<{ permissions: AgentPermission[] }>
+}
+
+export async function getPendingRequests(agentId: string) {
+  const res = await fetch(`${API_URL}/agents/${agentId}/permissions/requests`)
+  if (!res.ok) throw new Error('Failed to fetch requests')
+  return res.json() as Promise<{ requests: PermissionRequest[] }>
+}
+
+export async function grantPermissionRequest(agentId: string, requestId: string, grantType: 'one_time' | 'permanent') {
+  const res = await fetch(`${API_URL}/agents/${agentId}/permissions/requests/${requestId}/grant`, {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({ grant_type: grantType }),
+  })
+  if (!res.ok) throw new Error('Failed to grant permission')
+  return res.json() as Promise<AgentPermission>
+}
+
+export async function denyPermissionRequest(agentId: string, requestId: string) {
+  const res = await fetch(`${API_URL}/agents/${agentId}/permissions/requests/${requestId}/deny`, {
+    method: 'POST',
+  })
+  if (!res.ok) throw new Error('Failed to deny permission')
+  return res.json() as Promise<{ ok: boolean }>
+}
+
+export async function revokePermission(agentId: string, permissionId: string) {
+  const res = await fetch(`${API_URL}/agents/${agentId}/permissions/${permissionId}/revoke`, {
+    method: 'POST',
+  })
+  if (!res.ok) throw new Error('Failed to revoke permission')
+  return res.json() as Promise<{ ok: boolean }>
+}
