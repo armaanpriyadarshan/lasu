@@ -183,6 +183,44 @@ Agents should ship with a rich set of tools comparable to OpenClaw's capabilitie
 - **Contacts** — access user's contact list (with permission)
 - **General autonomy** — agents can conduct their own research, chain actions, and make decisions within their permission boundaries
 
+### Full Tool Roadmap
+
+**Tier 1 — Core (ship first)**
+| Tool | Permission | Status |
+|---|---|---|
+| Web search (Tavily/Brave) | `web` | Built (Phase 5A) |
+| Web page fetch | `web` | Built (Phase 5A) |
+| Google Calendar (read/create events) | `calendar` | Planned (Phase 5B) |
+| Gmail (read inbox/send email) | `email` | Planned (Phase 5B) |
+| Google Contacts (list/search) | `contacts` | Planned (Phase 5B) |
+| Google Drive (list/read files) | `files` | Planned (Phase 5B) |
+| Code execution (sandboxed Python) | `code` | Planned |
+| Image generation (DALL-E / similar) | `media` | Planned |
+| Image/vision analysis | `media` | Planned |
+| PDF analysis | `files` | Planned |
+
+**Tier 2 — Differentiation**
+| Tool | Permission | Status |
+|---|---|---|
+| Headless browser (Playwright/Chromium) | `browser` | Planned (post-sandboxing) |
+| SMS/calls (Twilio) | `sms` / `voice` | Partially built |
+| Reminders/push notifications | `notifications` | Planned |
+| Translation | `web` | Planned |
+| Notes/document creation | `files` | Planned |
+
+**Tier 3 — Platform Power**
+| Tool | Permission | Status |
+|---|---|---|
+| Multi-platform messaging (WhatsApp, Slack, Discord, etc.) | `messaging` | Planned |
+| Third-party app automation (Zapier/webhooks) | `integrations` | Planned |
+| Location/maps | `location` | Planned |
+| X/Twitter search | `web` | Planned |
+| Voice I/O (agent speaks/listens) | `voice` | Planned |
+| Shell/command execution | `code` | Planned (requires sandboxing) |
+
+**Skills Layer (on top of tools)**
+Skills are prompt-based instructions (SKILL.md files) that teach agents how to combine base tools for specific tasks. The skills marketplace turns ~20 base tools into thousands of capabilities without writing new code.
+
 ---
 
 ## Subscription Model (Subject to Change)
