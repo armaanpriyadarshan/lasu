@@ -25,26 +25,41 @@ export default function StartPage() {
   const [mode, setMode] = useState<'signin' | 'signup'>('signin')
   const [email, setEmail] = useState('')
   const [password, setPassword] = useState('')
+  const [confirm, setConfirm] = useState('')
   const [loading, setLoading] = useState(false)
   const [error, setError] = useState('')
   const passwordRef = useRef<TextInput>(null)
+  const confirmRef = useRef<TextInput>(null)
 
   useEffect(() => {
     if (!authLoading && userId) router.replace('/(app)')
   }, [authLoading, userId])
 
   const handleSubmit = async () => {
-    if (!email || !password) {
+    const trimmedEmail = email.trim()
+    if (!trimmedEmail || !password) {
       setError('Enter your email and password.')
+      return
+    }
+    if (!/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(trimmedEmail)) {
+      setError('Enter a valid email address.')
+      return
+    }
+    if (password.length < 6) {
+      setError('Password must be at least 6 characters.')
+      return
+    }
+    if (mode === 'signup' && password !== confirm) {
+      setError('Passwords do not match.')
       return
     }
     setError('')
     setLoading(true)
     try {
       if (mode === 'signup') {
-        await signUp(email, password)
+        await signUp(trimmedEmail, password)
       } else {
-        await signIn(email, password)
+        await signIn(trimmedEmail, password)
       }
       router.replace('/(app)')
     } catch (e: any) {
@@ -110,11 +125,24 @@ export default function StartPage() {
                 placeholder="PASSWORD"
                 placeholderTextColor={C.pencil}
                 secureTextEntry
-                returnKeyType="go"
-                onSubmitEditing={handleSubmit}
+                returnKeyType={mode === 'signup' ? 'next' : 'go'}
+                onSubmitEditing={() => mode === 'signup' ? confirmRef.current?.focus() : handleSubmit()}
                 value={password}
                 onChangeText={(t) => { setPassword(t); setError('') }}
               />
+              {mode === 'signup' && (
+                <TextInput
+                  ref={confirmRef}
+                  style={styles.input}
+                  placeholder="CONFIRM PASSWORD"
+                  placeholderTextColor={C.pencil}
+                  secureTextEntry
+                  returnKeyType="go"
+                  onSubmitEditing={handleSubmit}
+                  value={confirm}
+                  onChangeText={(t) => { setConfirm(t); setError('') }}
+                />
+              )}
 
               {error ? (
                 <ThemedText style={styles.error}>{error}</ThemedText>
@@ -166,6 +194,7 @@ export default function StartPage() {
               <Pressable
                 onPress={() => {
                   setMode(mode === 'signin' ? 'signup' : 'signin')
+                  setConfirm('')
                   setError('')
                 }}
                 dataSet={{ hover: 'darken' }}
