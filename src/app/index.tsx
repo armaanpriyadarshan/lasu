@@ -138,7 +138,11 @@ export default function StartPage() {
                 )}
               </Pressable>
 
-              <ThemedText style={[styles.dividerText, { color: C.pencil }]}>or</ThemedText>
+              <View style={styles.dividerRow}>
+                <View style={styles.dividerLine} />
+                <ThemedText style={[styles.dividerText, { color: C.pencil }]}>or</ThemedText>
+                <View style={styles.dividerLine} />
+              </View>
 
               <Pressable
                 onPress={handleGoogle}
@@ -263,6 +267,17 @@ const styles = StyleSheet.create({
     fontWeight: '400',
     color: C.parchment,
     ...(isWeb && { fontFamily: 'var(--font-display)' } as any),
+  },
+  dividerRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 12,
+    width: '100%',
+  },
+  dividerLine: {
+    flex: 1,
+    height: 1,
+    backgroundColor: C.ruledLine,
   },
   dividerText: {
     fontSize: 11,

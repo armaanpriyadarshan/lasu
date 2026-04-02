@@ -1,11 +1,12 @@
 import { Platform, Pressable, StyleSheet, View, useWindowDimensions } from 'react-native'
-import { Redirect, Slot, usePathname } from 'expo-router'
+import { Slot, usePathname, useRouter } from 'expo-router'
 import { SafeAreaView } from 'react-native-safe-area-context'
 
 import { ThemedText } from '@/components/themed-text'
 import { SvgIcon, type IconName } from '@/components/icons'
 import { Colors } from '@/constants/theme'
 import { useAuth } from '@/lib/auth'
+import { supabase } from '@/lib/supabase'
 
 const C = Colors.light
 const isWeb = Platform.OS === 'web'
@@ -21,12 +22,22 @@ const NAV_ITEMS: NavItem[] = [
 
 export default function AppLayout() {
   const { userId, session, loading, signOut } = useAuth()
+  const router = useRouter()
   const { width } = useWindowDimensions()
   const isDesktop = width > 768
   const pathname = usePathname()
 
-  if (loading) return null
-  if (!userId) return <Redirect href="/" />
+  const handleSignOut = () => {
+    supabase.auth.signOut().then(() => {
+      if (Platform.OS === 'web') {
+        window.location.href = '/'
+      } else {
+        router.replace('/')
+      }
+    })
+  }
+
+  if (loading || !userId) return null
 
   const activeKey = pathname === '/' || pathname === '/(app)' ? 'dashboard' : pathname.replace('/', '')
   const userEmail = session?.user?.email ?? ''
@@ -89,7 +100,7 @@ export default function AppLayout() {
                 <ThemedText style={[styles.userPlan, { color: C.pencil }]}>free tier</ThemedText>
               </View>
               <Pressable
-                onPress={signOut}
+                onPress={handleSignOut}
                 dataSet={{ hover: 'dim' }}
                 style={({ pressed }) => [styles.logoutBtn, pressed && { opacity: 0.5 }]}
               >
