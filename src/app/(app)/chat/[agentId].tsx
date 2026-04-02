@@ -15,7 +15,7 @@ import Animated, { FadeIn } from 'react-native-reanimated'
 import { ThemedText } from '@/components/themed-text'
 import { Colors } from '@/constants/theme'
 import { useAuth } from '@/lib/auth'
-import { getAgent, getAgentMessages, chatWithAgent, type Agent, type AgentMessage } from '@/lib/api'
+import { getAgent, getAgentMessages, chatWithAgent, getAgentMemories, deleteAgentMemory, type Agent, type AgentMessage, type AgentMemory } from '@/lib/api'
 
 const C = Colors.light
 const isWeb = Platform.OS === 'web'
@@ -31,6 +31,8 @@ export default function ChatScreen() {
   const [loading, setLoading] = useState(true)
   const [input, setInput] = useState('')
   const [sending, setSending] = useState(false)
+  const [memories, setMemories] = useState<AgentMemory[]>([])
+  const [showMemory, setShowMemory] = useState(false)
 
   useFocusEffect(
     useCallback(() => {
@@ -39,15 +41,23 @@ export default function ChatScreen() {
       Promise.all([
         getAgent(agentId),
         getAgentMessages(agentId),
+        getAgentMemories(agentId),
       ])
-        .then(([agentData, { messages }]) => {
+        .then(([agentData, { messages }, { memories }]) => {
           setAgent(agentData)
           setMessages(messages)
+          setMemories(memories)
         })
         .catch(() => router.back())
         .finally(() => setLoading(false))
     }, [agentId])
   )
+
+  const handleDeleteMemory = async (memoryId: string) => {
+    if (!agentId) return
+    await deleteAgentMemory(agentId, memoryId).catch(() => {})
+    setMemories((prev) => prev.filter((m) => m.id !== memoryId))
+  }
 
   const handleSend = async () => {
     if (!userId || !agentId || !input.trim() || sending) return
@@ -99,8 +109,41 @@ export default function ChatScreen() {
             {agent?.name}
           </ThemedText>
         </View>
-        <View style={styles.backBtn} />
+        <Pressable onPress={() => setShowMemory(!showMemory)} style={styles.backBtn}>
+          <ThemedText style={{ color: showMemory ? C.tide : C.pencil, fontSize: 12 }}>
+            {memories.length > 0 ? `Memory (${memories.length})` : 'Memory'}
+          </ThemedText>
+        </Pressable>
       </Animated.View>
+
+      {showMemory && (
+        <View style={styles.memoryPanel}>
+          <ThemedText serif style={[styles.memoryTitle, { color: C.ink }]}>
+            What {agent?.name} remembers
+          </ThemedText>
+          {memories.length === 0 ? (
+            <ThemedText style={[styles.memoryEmpty, { color: C.pencil }]}>
+              No memories yet. Chat more and {agent?.name} will learn about you.
+            </ThemedText>
+          ) : (
+            memories.map((mem) => (
+              <View key={mem.id} style={styles.memoryItem}>
+                <View style={styles.memoryContent}>
+                  <ThemedText style={[styles.memoryKey, { color: C.graphite }]}>
+                    {mem.key.replace(/_/g, ' ')}
+                  </ThemedText>
+                  <ThemedText style={[styles.memoryValue, { color: C.fadedInk }]}>
+                    {mem.value}
+                  </ThemedText>
+                </View>
+                <Pressable onPress={() => handleDeleteMemory(mem.id)} style={styles.memoryDelete}>
+                  <ThemedText style={{ color: C.pencil, fontSize: 12 }}>x</ThemedText>
+                </Pressable>
+              </View>
+            ))
+          )}
+        </View>
+      )}
 
       {/* Messages */}
       <FlatList
@@ -268,4 +311,45 @@ const styles = StyleSheet.create({
     ...(isWeb && { cursor: 'pointer' } as any),
   },
   sendBtnText: { fontSize: 13, fontWeight: '500' },
+
+  memoryPanel: {
+    backgroundColor: C.agedPaper,
+    borderBottomWidth: 0.5,
+    borderBottomColor: C.ruledLine,
+    padding: 16,
+    maxHeight: 250,
+  },
+  memoryTitle: {
+    fontSize: 16,
+    fontWeight: '400',
+    marginBottom: 12,
+    ...(isWeb && { fontFamily: 'var(--font-serif)' } as any),
+  },
+  memoryEmpty: {
+    fontSize: 13,
+    ...(isWeb && { fontFamily: 'var(--font-display)' } as any),
+  },
+  memoryItem: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'space-between',
+    paddingVertical: 8,
+    borderBottomWidth: 0.5,
+    borderBottomColor: C.ruledLine,
+  },
+  memoryContent: { flex: 1, gap: 2 },
+  memoryKey: {
+    fontSize: 11,
+    fontWeight: '500',
+    textTransform: 'uppercase',
+    ...(isWeb && { fontFamily: 'var(--font-mono)' } as any),
+  },
+  memoryValue: {
+    fontSize: 13,
+    ...(isWeb && { fontFamily: 'var(--font-display)' } as any),
+  },
+  memoryDelete: {
+    padding: 8,
+    ...(isWeb && { cursor: 'pointer' } as any),
+  },
 })
