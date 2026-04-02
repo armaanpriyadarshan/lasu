@@ -311,3 +311,42 @@ async def get_due_jobs() -> list:
 
 async def mark_job_ran(job_id: str, schedule_ms: int):
     supabase.rpc("mark_job_ran", {"job_id_param": job_id, "schedule_ms_param": schedule_ms}).execute()
+
+
+# ── OAuth token functions ──
+
+async def save_oauth_token(user_id: str, provider: str, access_token: str,
+                           refresh_token: str = None, token_expiry: str = None, scopes: str = "") -> dict:
+    res = (
+        supabase.table("user_oauth_tokens")
+        .upsert(
+            {
+                "user_id": user_id,
+                "provider": provider,
+                "access_token": access_token,
+                "refresh_token": refresh_token,
+                "token_expiry": token_expiry,
+                "scopes": scopes,
+                "updated_at": "now()",
+            },
+            on_conflict="user_id,provider",
+        )
+        .execute()
+    )
+    return res.data[0] if res.data else None
+
+
+async def get_oauth_token(user_id: str, provider: str = "google") -> dict | None:
+    res = (
+        supabase.table("user_oauth_tokens")
+        .select("*")
+        .eq("user_id", user_id)
+        .eq("provider", provider)
+        .execute()
+    )
+    return res.data[0] if res.data else None
+
+
+async def delete_oauth_token(user_id: str, provider: str = "google") -> bool:
+    res = supabase.table("user_oauth_tokens").delete().eq("user_id", user_id).eq("provider", provider).execute()
+    return len(res.data) > 0
