@@ -16,7 +16,14 @@ import Animated, { FadeIn } from 'react-native-reanimated'
 import { ThemedText } from '@/components/themed-text'
 import { Colors } from '@/constants/theme'
 import { useAuth } from '@/lib/auth'
-import { getAgent, getAgentMessages, chatWithAgent, getAgentMemories, deleteAgentMemory, type Agent, type AgentMessage, type AgentMemory } from '@/lib/api'
+import {
+  getAgent, getAgentMessages, chatWithAgent,
+  getAgentMemories, deleteAgentMemory,
+  getPendingRequests, grantPermissionRequest, denyPermissionRequest,
+  getAgentPermissions, revokePermission,
+  type Agent, type AgentMessage, type AgentMemory,
+  type PermissionRequest, type AgentPermission,
+} from '@/lib/api'
 
 const C = Colors.light
 const isWeb = Platform.OS === 'web'
@@ -34,6 +41,9 @@ export default function ChatScreen() {
   const [sending, setSending] = useState(false)
   const [memories, setMemories] = useState<AgentMemory[]>([])
   const [showMemory, setShowMemory] = useState(false)
+  const [permRequests, setPermRequests] = useState<PermissionRequest[]>([])
+  const [permissions, setPermissions] = useState<AgentPermission[]>([])
+  const [showPermissions, setShowPermissions] = useState(false)
 
   useFocusEffect(
     useCallback(() => {
@@ -43,11 +53,15 @@ export default function ChatScreen() {
         getAgent(agentId),
         getAgentMessages(agentId),
         getAgentMemories(agentId),
+        getPendingRequests(agentId),
+        getAgentPermissions(agentId),
       ])
-        .then(([agentData, { messages }, { memories }]) => {
+        .then(([agentData, { messages }, { memories }, { requests }, { permissions }]) => {
           setAgent(agentData)
           setMessages(messages)
           setMemories(memories)
+          setPermRequests(requests)
+          setPermissions(permissions)
         })
         .catch(() => router.back())
         .finally(() => setLoading(false))
@@ -58,6 +72,31 @@ export default function ChatScreen() {
     if (!agentId) return
     await deleteAgentMemory(agentId, memoryId).catch(() => {})
     setMemories((prev) => prev.filter((m) => m.id !== memoryId))
+  }
+
+  const handleGrantPermission = async (requestId: string, grantType: 'one_time' | 'permanent') => {
+    if (!agentId) return
+    try {
+      await grantPermissionRequest(agentId, requestId, grantType)
+      setPermRequests((prev) => prev.filter((r) => r.id !== requestId))
+      getAgentPermissions(agentId).then(({ permissions }) => setPermissions(permissions)).catch(() => {})
+    } catch {}
+  }
+
+  const handleDenyPermission = async (requestId: string) => {
+    if (!agentId) return
+    try {
+      await denyPermissionRequest(agentId, requestId)
+      setPermRequests((prev) => prev.filter((r) => r.id !== requestId))
+    } catch {}
+  }
+
+  const handleRevokePermission = async (permissionId: string) => {
+    if (!agentId) return
+    try {
+      await revokePermission(agentId, permissionId)
+      setPermissions((prev) => prev.filter((p) => p.id !== permissionId))
+    } catch {}
   }
 
   const handleSend = async () => {
@@ -75,6 +114,7 @@ export default function ChatScreen() {
       setMessages((prev) => [...prev, assistantMsg])
       // Refresh memories after each turn (extraction happens server-side)
       getAgentMemories(agentId).then(({ memories }) => setMemories(memories)).catch(() => {})
+      getPendingRequests(agentId).then(({ requests }) => setPermRequests(requests)).catch(() => {})
     } catch {
       const errMsg: AgentMessage = { role: 'assistant', content: 'Something went wrong. Try again.', created_at: new Date().toISOString() }
       setMessages((prev) => [...prev, errMsg])
@@ -112,11 +152,18 @@ export default function ChatScreen() {
             {agent?.name}
           </ThemedText>
         </View>
-        <Pressable onPress={() => setShowMemory(!showMemory)} style={styles.backBtn}>
-          <ThemedText style={{ color: showMemory ? C.tide : C.pencil, fontSize: 12 }}>
-            {memories.length > 0 ? `Memory (${memories.length})` : 'Memory'}
-          </ThemedText>
-        </Pressable>
+        <View style={styles.headerRight}>
+          <Pressable onPress={() => { setShowPermissions(!showPermissions); setShowMemory(false) }}>
+            <ThemedText style={{ color: showPermissions ? C.tide : C.pencil, fontSize: 11 }}>
+              {permissions.length > 0 ? `Perms (${permissions.length})` : 'Perms'}
+            </ThemedText>
+          </Pressable>
+          <Pressable onPress={() => { setShowMemory(!showMemory); setShowPermissions(false) }}>
+            <ThemedText style={{ color: showMemory ? C.tide : C.pencil, fontSize: 11 }}>
+              {memories.length > 0 ? `Memory (${memories.length})` : 'Memory'}
+            </ThemedText>
+          </Pressable>
+        </View>
       </Animated.View>
 
       {showMemory && (
@@ -141,6 +188,35 @@ export default function ChatScreen() {
                 </View>
                 <Pressable onPress={() => handleDeleteMemory(mem.id)} style={styles.memoryDelete}>
                   <ThemedText style={{ color: C.pencil, fontSize: 12 }}>x</ThemedText>
+                </Pressable>
+              </View>
+            ))
+          )}
+        </ScrollView>
+      )}
+
+      {showPermissions && (
+        <ScrollView style={styles.memoryPanel}>
+          <ThemedText serif style={[styles.memoryTitle, { color: C.ink }]}>
+            Permissions
+          </ThemedText>
+          {permissions.length === 0 ? (
+            <ThemedText style={[styles.memoryEmpty, { color: C.pencil }]}>
+              No permissions granted yet.
+            </ThemedText>
+          ) : (
+            permissions.map((perm) => (
+              <View key={perm.id} style={styles.memoryItem}>
+                <View style={styles.memoryContent}>
+                  <ThemedText style={[styles.memoryKey, { color: C.graphite }]}>
+                    {perm.permission}
+                  </ThemedText>
+                  <ThemedText style={[styles.memoryValue, { color: C.fadedInk }]}>
+                    {perm.grant_type === 'permanent' ? 'Always allowed' : 'One-time'}
+                  </ThemedText>
+                </View>
+                <Pressable onPress={() => handleRevokePermission(perm.id)} style={styles.memoryDelete}>
+                  <ThemedText style={{ color: C.waxSeal, fontSize: 11 }}>Revoke</ThemedText>
                 </Pressable>
               </View>
             ))
@@ -183,6 +259,40 @@ export default function ChatScreen() {
           </View>
         )}
       />
+
+      {permRequests.length > 0 && (
+        <View style={styles.permRequestBar}>
+          {permRequests.map((req) => (
+            <View key={req.id} style={styles.permRequestCard}>
+              <ThemedText style={[styles.permRequestText, { color: C.fadedInk }]}>
+                {agent?.name} needs {req.permission} access
+              </ThemedText>
+              {req.reason ? (
+                <ThemedText style={[styles.permRequestReason, { color: C.pencil }]}>
+                  {req.reason}
+                </ThemedText>
+              ) : null}
+              <View style={styles.permRequestActions}>
+                <Pressable
+                  onPress={() => handleGrantPermission(req.id, 'one_time')}
+                  style={[styles.permBtn, styles.permBtnOutline]}
+                >
+                  <ThemedText style={[styles.permBtnText, { color: C.ink }]}>Allow once</ThemedText>
+                </Pressable>
+                <Pressable
+                  onPress={() => handleGrantPermission(req.id, 'permanent')}
+                  style={[styles.permBtn, styles.permBtnFilled]}
+                >
+                  <ThemedText style={[styles.permBtnText, { color: C.white }]}>Always allow</ThemedText>
+                </Pressable>
+                <Pressable onPress={() => handleDenyPermission(req.id)}>
+                  <ThemedText style={{ color: C.pencil, fontSize: 12 }}>Deny</ThemedText>
+                </Pressable>
+              </View>
+            </View>
+          ))}
+        </View>
+      )}
 
       {/* Input */}
       <View style={styles.inputBar}>
@@ -354,5 +464,61 @@ const styles = StyleSheet.create({
   memoryDelete: {
     padding: 8,
     ...(isWeb && { cursor: 'pointer' } as any),
+  },
+  headerRight: {
+    flexDirection: 'row',
+    gap: 12,
+    alignItems: 'center',
+    width: 120,
+    justifyContent: 'flex-end',
+  },
+  permRequestBar: {
+    padding: 12,
+    gap: 8,
+    backgroundColor: C.agedPaper,
+    borderTopWidth: 0.5,
+    borderTopColor: C.ruledLine,
+  },
+  permRequestCard: {
+    backgroundColor: C.parchment,
+    borderWidth: 0.5,
+    borderColor: C.ruledLine,
+    borderRadius: 10,
+    padding: 14,
+    gap: 8,
+  },
+  permRequestText: {
+    fontSize: 13,
+    fontWeight: '500',
+    ...(isWeb && { fontFamily: 'var(--font-display)' } as any),
+  },
+  permRequestReason: {
+    fontSize: 12,
+    ...(isWeb && { fontFamily: 'var(--font-display)' } as any),
+  },
+  permRequestActions: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 10,
+    marginTop: 4,
+  },
+  permBtn: {
+    paddingVertical: 7,
+    paddingHorizontal: 14,
+    borderRadius: 7,
+    ...(isWeb && { cursor: 'pointer' } as any),
+  },
+  permBtnOutline: {
+    borderWidth: 0.5,
+    borderColor: C.ruledLine,
+    backgroundColor: C.parchment,
+  },
+  permBtnFilled: {
+    backgroundColor: C.ink,
+  },
+  permBtnText: {
+    fontSize: 12,
+    fontWeight: '500',
+    ...(isWeb && { fontFamily: 'var(--font-display)' } as any),
   },
 })
