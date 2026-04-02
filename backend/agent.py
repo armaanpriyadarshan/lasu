@@ -1,6 +1,6 @@
 import os
 from openai import OpenAI
-from db import get_agent_messages, get_agent
+from db import get_agent_messages, get_agent, get_agent_memories
 
 
 def _get_client():
@@ -41,6 +41,12 @@ async def run_agent_chat(agent_id: str, user_message: str) -> str:
 
     system_prompt = agent.get("system_prompt") or DEFAULT_SYSTEM_PROMPT
     model = agent.get("model", "gpt-5.4")
+
+    # Inject memories into context
+    memories = await get_agent_memories(agent_id)
+    if memories:
+        memory_text = "\n".join(f"- {m['key']}: {m['value']}" for m in memories)
+        system_prompt += f"\n\nThings you remember about this user:\n{memory_text}"
 
     history = await get_agent_messages(agent_id, limit=20)
 
