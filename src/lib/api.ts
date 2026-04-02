@@ -239,3 +239,17 @@ export async function deleteJob(agentId: string, jobId: string) {
   if (!res.ok) throw new Error('Failed to delete job')
   return res.json() as Promise<{ ok: boolean }>
 }
+
+// ── Google OAuth API ──
+
+export async function getGoogleAuthUrl(userId: string) {
+  const res = await fetch(`${API_URL}/auth/google/url?user_id=${userId}`)
+  if (!res.ok) throw new Error('Failed to get auth URL')
+  return res.json() as Promise<{ url: string }>
+}
+
+export async function getGoogleStatus(userId: string) {
+  const res = await fetch(`${API_URL}/auth/google/status?user_id=${userId}`)
+  if (!res.ok) throw new Error('Failed to check status')
+  return res.json() as Promise<{ connected: boolean }>
+}
