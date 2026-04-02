@@ -102,6 +102,7 @@ export default function ChatScreen() {
   const { userId } = useAuth()
   const router = useRouter()
   const flatListRef = useRef<FlatList>(null)
+  const lastFailedMessage = useRef<string | null>(null)
 
   const [agent, setAgent] = useState<Agent | null>(null)
   const [messages, setMessages] = useState<AgentMessage[]>([])
@@ -219,6 +220,17 @@ export default function ChatScreen() {
               await grantPermission(agentId, p).catch(() => {})
             }
             getAgentPermissions(agentId).then(({ permissions }) => setPermissions(permissions)).catch(() => {})
+            // Retry the last failed message now that Google is connected
+            if (lastFailedMessage.current) {
+              const retryMsg = lastFailedMessage.current
+              lastFailedMessage.current = null
+              setInput(retryMsg)
+              // Small delay to let permissions propagate, then auto-send
+              setTimeout(() => {
+                setInput('')
+                handleSendMessage(retryMsg)
+              }, 1000)
+            }
           }
         }
       }, 2000)
@@ -226,10 +238,9 @@ export default function ChatScreen() {
     } catch {}
   }
 
-  const handleSend = async () => {
-    if (!userId || !agentId || !input.trim() || sending) return
-    const text = input.trim()
-    setInput('')
+  const handleSendMessage = async (messageText: string) => {
+    if (!userId || !agentId || !messageText.trim() || sending) return
+    const text = messageText.trim()
     setSending(true)
 
     setMessages((prev) => [...prev, { role: 'user', content: text, created_at: new Date().toISOString() }])
@@ -272,6 +283,7 @@ export default function ChatScreen() {
             })
             if (toolCalls.some((tc) => tc.result.includes('not connected') || tc.result.includes('Google account'))) {
               setShowGoogleConnect(true)
+              lastFailedMessage.current = text
             }
           }
         },
@@ -281,6 +293,7 @@ export default function ChatScreen() {
             const reply = prev[streamIdx.current]?.content || ''
             if (reply.includes('Google account not connected') || reply.includes('connect your Google account')) {
               setShowGoogleConnect(true)
+              lastFailedMessage.current = text
             }
             return prev
           })
@@ -300,6 +313,13 @@ export default function ChatScreen() {
     } finally {
       setSending(false)
     }
+  }
+
+  const handleSend = () => {
+    if (!input.trim()) return
+    const text = input.trim()
+    setInput('')
+    handleSendMessage(text)
   }
 
   const permCount = permissions.filter((p) => !p.revoked_at).length
