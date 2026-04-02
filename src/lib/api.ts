@@ -91,7 +91,7 @@ export async function chatWithAgent(agentId: string, userId: string, message: st
     body: JSON.stringify({ user_id: userId, message }),
   })
   if (!res.ok) throw new Error('Failed to send message')
-  return res.json() as Promise<{ reply: string }>
+  return res.json() as Promise<{ reply: string; tool_calls: Array<{ tool: string; args: Record<string, unknown>; result: string }>; permission_requests: unknown[] }>
 }
 
 export async function getAgentMessages(agentId: string, limit = 50) {

@@ -131,7 +131,15 @@ export default function ChatScreen() {
     setMessages((prev) => [...prev, userMsg])
 
     try {
-      const { reply } = await chatWithAgent(agentId, userId, text)
+      const { reply, tool_calls } = await chatWithAgent(agentId, userId, text)
+      // Show tool activity before the reply
+      if (tool_calls && tool_calls.length > 0) {
+        const toolSummary = tool_calls.map((tc: { tool: string; args: Record<string, unknown>; result: string }) =>
+          `[${tc.tool}] ${tc.result === 'permission_denied' ? 'Permission needed' : 'Done'}`
+        ).join('\n')
+        const toolMsg: AgentMessage = { role: 'assistant', content: `Tools used:\n${toolSummary}`, created_at: new Date().toISOString() }
+        setMessages((prev) => [...prev, toolMsg])
+      }
       const assistantMsg: AgentMessage = { role: 'assistant', content: reply, created_at: new Date().toISOString() }
       setMessages((prev) => [...prev, assistantMsg])
       // Refresh memories after each turn (extraction happens server-side)
