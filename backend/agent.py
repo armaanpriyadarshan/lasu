@@ -47,7 +47,12 @@ The agent has access to real tools it can use:
 - list_contacts: Search Google Contacts
 - list_drive_files / read_drive_file: Browse and read Google Drive files
 
-The agent CAN and SHOULD use these tools when relevant. Do NOT tell the agent it cannot perform actions — it has real tool access. The prompt should encourage the agent to take action using its tools rather than just offering to draft things.
+The agent also has autonomous capabilities:
+- It can run persistently via a heartbeat system, waking up on a schedule to check on things and proactively reach out
+- It can handle recurring tasks — if the user asks for something to happen regularly, the agent can do it on its heartbeat cycle
+- It remembers facts and preferences about the user across conversations
+
+The agent CAN and SHOULD use these tools when relevant. Do NOT tell the agent it cannot perform actions — it has real tool access and autonomous capabilities. The prompt should encourage the agent to take action using its tools rather than just offering to draft things. If asked to do something repeatedly or on a schedule, the agent should confirm it can handle that through its persistent operation.
 
 Output ONLY the system prompt text, nothing else.""",
             },
