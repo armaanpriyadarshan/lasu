@@ -27,3 +27,16 @@ class ChatRequest(BaseModel):
 
 class GrantPermissionRequest(BaseModel):
     grant_type: str  # "one_time" or "permanent"
+
+
+class CreateJobRequest(BaseModel):
+    schedule_ms: int = 1800000
+    active_hours_start: Optional[str] = None
+    active_hours_end: Optional[str] = None
+
+
+class UpdateJobRequest(BaseModel):
+    schedule_ms: Optional[int] = None
+    active_hours_start: Optional[str] = None
+    active_hours_end: Optional[str] = None
+    enabled: Optional[bool] = None

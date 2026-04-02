@@ -1,4 +1,6 @@
+import asyncio
 import os
+from contextlib import asynccontextmanager
 
 from fastapi import FastAPI, HTTPException, Request
 from fastapi.middleware.cors import CORSMiddleware
@@ -13,12 +15,21 @@ from db import (
     get_agent_memories, upsert_memory, delete_memory,
     get_agent_permissions, grant_permission, revoke_permission,
     get_pending_requests, resolve_permission_request,
+    create_job, get_jobs, get_job, update_job, delete_job,
 )
 from agent import run_agent, run_agent_chat, generate_system_prompt
 from memory import extract_memories
-from models import MessageRequest, CreateAgentRequest, UpdateAgentRequest, ChatRequest, GrantPermissionRequest
+from models import MessageRequest, CreateAgentRequest, UpdateAgentRequest, ChatRequest, GrantPermissionRequest, CreateJobRequest, UpdateJobRequest
+from scheduler import scheduler_loop
 
-app = FastAPI()
+
+@asynccontextmanager
+async def lifespan(app):
+    task = asyncio.create_task(scheduler_loop())
+    yield
+    task.cancel()
+
+app = FastAPI(lifespan=lifespan)
 
 app.add_middleware(
     CORSMiddleware,
@@ -184,4 +195,45 @@ async def revoke_permission_endpoint(agent_id: str, permission_id: str):
     success = await revoke_permission(permission_id)
     if not success:
         raise HTTPException(status_code=404, detail="Permission not found or already revoked")
+    return {"ok": True}
+
+
+# --- Job endpoints ---
+
+@app.post("/agents/{agent_id}/jobs")
+async def create_job_endpoint(agent_id: str, req: CreateJobRequest):
+    agent = await get_agent(agent_id)
+    if not agent:
+        raise HTTPException(status_code=404, detail="Agent not found")
+    job = await create_job(
+        agent_id,
+        schedule_ms=req.schedule_ms,
+        active_hours_start=req.active_hours_start,
+        active_hours_end=req.active_hours_end,
+    )
+    return job
+
+
+@app.get("/agents/{agent_id}/jobs")
+async def list_jobs(agent_id: str):
+    jobs = await get_jobs(agent_id)
+    return {"jobs": jobs}
+
+
+@app.patch("/agents/{agent_id}/jobs/{job_id}")
+async def update_job_endpoint(agent_id: str, job_id: str, req: UpdateJobRequest):
+    updates = req.model_dump(exclude_none=True)
+    if not updates:
+        raise HTTPException(status_code=400, detail="No fields to update")
+    job = await update_job(job_id, updates)
+    if not job:
+        raise HTTPException(status_code=404, detail="Job not found")
+    return job
+
+
+@app.delete("/agents/{agent_id}/jobs/{job_id}")
+async def delete_job_endpoint(agent_id: str, job_id: str):
+    success = await delete_job(job_id)
+    if not success:
+        raise HTTPException(status_code=404, detail="Job not found")
     return {"ok": True}
