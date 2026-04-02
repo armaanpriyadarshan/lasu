@@ -146,3 +146,109 @@ async def upsert_memory(agent_id: str, key: str, value: str, source: str = "extr
 async def delete_memory(memory_id: str) -> bool:
     res = supabase.table("agent_memory").delete().eq("id", memory_id).execute()
     return len(res.data) > 0
+
+
+# ── Permission functions ──
+
+async def get_agent_permissions(agent_id: str) -> list:
+    res = (
+        supabase.table("agent_permissions")
+        .select("*")
+        .eq("agent_id", agent_id)
+        .is_("revoked_at", "null")
+        .execute()
+    )
+    return res.data
+
+
+async def has_permission(agent_id: str, permission: str) -> bool:
+    res = (
+        supabase.table("agent_permissions")
+        .select("id")
+        .eq("agent_id", agent_id)
+        .eq("permission", permission)
+        .is_("revoked_at", "null")
+        .execute()
+    )
+    return len(res.data) > 0
+
+
+async def grant_permission(agent_id: str, permission: str, grant_type: str = "permanent") -> dict:
+    res = supabase.table("agent_permissions").insert({
+        "agent_id": agent_id,
+        "permission": permission,
+        "grant_type": grant_type,
+    }).execute()
+    return res.data[0] if res.data else None
+
+
+async def revoke_permission(permission_id: str) -> bool:
+    res = (
+        supabase.table("agent_permissions")
+        .update({"revoked_at": "now()"})
+        .eq("id", permission_id)
+        .is_("revoked_at", "null")
+        .execute()
+    )
+    return len(res.data) > 0
+
+
+async def use_one_time_permission(agent_id: str, permission: str) -> bool:
+    res = (
+        supabase.table("agent_permissions")
+        .update({"revoked_at": "now()", "expires_at": "now()"})
+        .eq("agent_id", agent_id)
+        .eq("permission", permission)
+        .eq("grant_type", "one_time")
+        .is_("revoked_at", "null")
+        .execute()
+    )
+    return len(res.data) > 0
+
+
+# ── Permission request functions ──
+
+async def create_permission_request(agent_id: str, permission: str, reason: str) -> dict:
+    existing = (
+        supabase.table("permission_requests")
+        .select("*")
+        .eq("agent_id", agent_id)
+        .eq("permission", permission)
+        .eq("status", "pending")
+        .execute()
+    )
+    if existing.data:
+        return existing.data[0]
+
+    res = supabase.table("permission_requests").insert({
+        "agent_id": agent_id,
+        "permission": permission,
+        "reason": reason,
+    }).execute()
+    return res.data[0] if res.data else None
+
+
+async def get_pending_requests(agent_id: str) -> list:
+    res = (
+        supabase.table("permission_requests")
+        .select("*")
+        .eq("agent_id", agent_id)
+        .eq("status", "pending")
+        .order("created_at", desc=False)
+        .execute()
+    )
+    return res.data
+
+
+async def resolve_permission_request(request_id: str, status: str, grant_type: str = None) -> dict | None:
+    update = {"status": status, "resolved_at": "now()"}
+    if grant_type:
+        update["grant_type"] = grant_type
+    res = (
+        supabase.table("permission_requests")
+        .update(update)
+        .eq("id", request_id)
+        .eq("status", "pending")
+        .execute()
+    )
+    return res.data[0] if res.data else None
